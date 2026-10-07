@@ -1,5 +1,5 @@
 import parseLaunchState from './chain/parseLaunchState';
-import type { LaunchReader, LaunchStore } from './types';
+import type { LaunchReader, LaunchStore } from './types/launch';
 
 const refreshLaunchState = async (reader: LaunchReader, store: LaunchStore): Promise<void> => {
   const { value: count } = await reader.launchCount();

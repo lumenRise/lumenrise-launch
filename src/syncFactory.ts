@@ -1,6 +1,6 @@
-import type { Configuration } from './configuration';
-import type { LaunchReader, LaunchStore } from './types';
 import parseLaunchConfig from './chain/parseLaunchConfig';
+import type { Configuration } from './types/configuration';
+import type { LaunchReader, LaunchStore } from './types/launch';
 
 const syncFactory = async (
   reader: LaunchReader,

@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-import type { LaunchData } from '../types';
+import type { LaunchData } from '../types/launch';
 
 const metadataSchema = new Schema(
   {

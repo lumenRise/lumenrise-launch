@@ -5,8 +5,10 @@ import log from './logger';
 import Launch from './store/Launch';
 import syncFactory from './syncFactory';
 import FactoryCursor from './store/FactoryCursor';
+import AssetIdentity from './store/AssetIdentity';
 import { loadConfiguration } from './configuration';
 import refreshLaunchState from './refreshLaunchState';
+import syncAssetIdentities from './syncAssetIdentities';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
 
@@ -23,7 +25,7 @@ const main = async (): Promise<void> => {
   log.info({ database: configuration.dbName }, 'Launch database connected');
 
   try {
-    await Promise.all([Launch.createIndexes(), FactoryCursor.createIndexes()]);
+    await Promise.all([Launch.createIndexes(), FactoryCursor.createIndexes(), AssetIdentity.createIndexes()]);
 
     const reader = await createLaunchReader(configuration);
     const store = createLaunchStore(configuration);
@@ -33,10 +35,23 @@ const main = async (): Promise<void> => {
       'Launch worker started',
     );
 
+    let nextAssetIdentitySyncAt = 0;
+
     while (!controller.signal.aborted) {
       try {
         const added = await syncFactory(reader, store, configuration);
         await refreshLaunchState(reader, store);
+
+        if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
+          nextAssetIdentitySyncAt = Date.now() + 15 * 60 * 1000;
+
+          try {
+            await syncAssetIdentities(configuration);
+            nextAssetIdentitySyncAt = Date.now() + 60 * 60 * 1000;
+          } catch (error) {
+            log.warn({ error }, 'Asset identity sync is temporarily unavailable');
+          }
+        }
 
         if (added > 0) {
           log.info({ count: added, factoryContractId: configuration.factoryContractId }, 'Launches indexed');
