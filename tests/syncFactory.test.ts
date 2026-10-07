@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 
 import syncFactory from '../src/syncFactory';
-import type { Configuration } from '../src/configuration';
 import refreshLaunchState from '../src/refreshLaunchState';
+import type { Configuration } from '../src/types/configuration';
 import type { LaunchData, LaunchReader, LaunchStore } from '../src/types';
 
 const factoryContractId = StrKey.encodeContract(Buffer.alloc(32, 1));

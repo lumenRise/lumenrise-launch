@@ -1,11 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-interface FactoryCursorRecord {
-  network: 'testnet' | 'public';
-  factoryContractId: string;
-  nextIndex: number;
-  nextStateIndex: number;
-}
+import type { FactoryCursorRecord } from '../types/factoryCursor';
 
 const factoryCursorSchema = new Schema<FactoryCursorRecord>(
   {

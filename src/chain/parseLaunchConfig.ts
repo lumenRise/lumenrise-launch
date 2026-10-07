@@ -1,19 +1,9 @@
 import { StrKey } from '@stellar/stellar-sdk';
 
 import toPlainValue from './toPlainValue';
-import type { LaunchData } from '../types';
+import type { LaunchData } from '../types/launch';
 import parseLaunchState from './parseLaunchState';
-
-interface LaunchConfigInput {
-  rawConfig: unknown;
-  rawState: unknown;
-  network: LaunchData['network'];
-  factoryContractId: string;
-  factoryIndex: number;
-  contractId: string;
-  asOfLedger: number;
-  stateAsOfLedger: number;
-}
+import type { LaunchConfigInput } from '../types/launchConfig';
 
 const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
   const { rawConfig, rawState, network, factoryContractId, factoryIndex, contractId, asOfLedger, stateAsOfLedger } = input;

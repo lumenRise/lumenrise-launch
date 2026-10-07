@@ -31,6 +31,11 @@ const schema = defineConfig({
     example: 'https://soroban-testnet.stellar.org',
     description: 'Stellar RPC endpoint for read-only contract calls.',
   },
+  STELLAR_HORIZON_URL: {
+    default: '',
+    example: 'https://horizon-testnet.stellar.org',
+    description: 'Horizon endpoint used to discover issued asset candidates.',
+  },
   STELLAR_READ_ACCOUNT: {
     example: 'GDAUDEZPAI4QV2L6A6OOJ27KDQMFPRQJH26AUUTSQOYBNFZWPVYXBHQH',
     description: 'Funded Stellar account used as the source for simulations.',

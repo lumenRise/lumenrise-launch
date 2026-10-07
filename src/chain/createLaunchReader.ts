@@ -1,8 +1,8 @@
 import { rpc, nativeToScVal } from '@stellar/stellar-sdk';
 
 import readContract from './readContract';
-import type { LaunchReader } from '../types';
-import type { Configuration } from '../configuration';
+import type { LaunchReader } from '../types/launch';
+import type { Configuration } from '../types/configuration';
 
 const createLaunchReader = async (
   configuration: Configuration,
@@ -11,6 +11,7 @@ const createLaunchReader = async (
     allowHttp: configuration.rpcUrl.startsWith('http:'),
     timeout: 15_000,
   });
+
   const network = await server.getNetwork();
 
   if (network.passphrase !== configuration.networkPassphrase) {

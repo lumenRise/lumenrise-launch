@@ -1,24 +1,20 @@
 import { Networks, StrKey } from '@stellar/stellar-sdk';
 
 import env from './env';
-
-interface Configuration {
-  network: 'testnet' | 'public';
-  networkPassphrase: string;
-  factoryContractId: string;
-  observerAddress: string;
-  rpcUrl: string;
-  dbUri: string;
-  dbName: string;
-  pollIntervalMs: number;
-}
+import type { Configuration } from './types/configuration';
 
 const loadConfiguration = (): Configuration => {
   const network = env.STELLAR_AUTH_NETWORK;
   const factoryContractId = env.LAUNCH_FACTORY_CONTRACT_ID;
   const observerAddress = env.STELLAR_READ_ACCOUNT;
   const rpcUrl = env.STELLAR_RPC_URL;
+  const url = new URL(rpcUrl);
   const pollIntervalMs = env.LAUNCH_POLL_INTERVAL_MS;
+  const horizonUrl =
+    env.STELLAR_HORIZON_URL ||
+    (network === 'testnet'
+      ? 'https://horizon-testnet.stellar.org'
+      : 'https://horizon.stellar.org');
 
   if (!StrKey.isValidContract(factoryContractId)) {
     throw new Error('LAUNCH_FACTORY_CONTRACT_ID must be a Stellar contract address');
@@ -32,8 +28,6 @@ const loadConfiguration = (): Configuration => {
     throw new Error('LAUNCH_POLL_INTERVAL_MS must be between 1000 and 60000');
   }
 
-  const url = new URL(rpcUrl);
-
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new Error('STELLAR_RPC_URL must be an HTTP or HTTPS URL');
   }
@@ -42,12 +36,18 @@ const loadConfiguration = (): Configuration => {
     throw new Error('STELLAR_RPC_URL must use HTTPS on the public network');
   }
 
+  if (new URL(horizonUrl).protocol !== 'https:') {
+    throw new Error('STELLAR_HORIZON_URL must use HTTPS');
+  }
+
   return {
     network,
-    networkPassphrase: network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
+    networkPassphrase:
+      network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
     factoryContractId,
     observerAddress,
     rpcUrl,
+    horizonUrl,
     dbUri: env.DB_URI,
     dbName: env.DB_NAME,
     pollIntervalMs,
@@ -55,4 +55,3 @@ const loadConfiguration = (): Configuration => {
 };
 
 export { loadConfiguration };
-export type { Configuration };

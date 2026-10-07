@@ -1,7 +1,7 @@
 import Launch from './Launch';
-import type { LaunchStore } from '../types';
 import FactoryCursor from './FactoryCursor';
-import type { Configuration } from '../configuration';
+import type { LaunchStore } from '../types/launch';
+import type { Configuration } from '../types/configuration';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
   const identity = {
@@ -18,7 +18,11 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
 
     save: async (launch) => {
       await Launch.updateOne(
-        { ...identity, factoryIndex: launch.factoryIndex, contractId: launch.contractId },
+        {
+          ...identity,
+          factoryIndex: launch.factoryIndex,
+          contractId: launch.contractId,
+        },
         { $setOnInsert: launch },
         { upsert: true },
       );
@@ -41,7 +45,9 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
     refreshState: async (index, state, ledger) => {
       const result = await Launch.updateOne(
         { ...identity, factoryIndex: index },
-        { $set: { state, stateAsOfLedger: ledger, stateObservedAt: new Date() } },
+        {
+          $set: { state, stateAsOfLedger: ledger, stateObservedAt: new Date() },
+        },
       );
 
       if (result.matchedCount !== 1) {
@@ -50,7 +56,9 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
     },
 
     advanceState: async (nextStateIndex) => {
-      const result = await FactoryCursor.updateOne(identity, { $set: { nextStateIndex } });
+      const result = await FactoryCursor.updateOne(identity, {
+        $set: { nextStateIndex },
+      });
 
       if (result.matchedCount !== 1) {
         throw new Error('Factory cursor is missing');
