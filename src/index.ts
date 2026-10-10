@@ -12,6 +12,7 @@ import finalizeTokenImages from './finalizeTokenImages';
 import syncAssetIdentities from './syncAssetIdentities';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
+import markTokenImagesForCleanup from './markTokenImagesForCleanup';
 
 const main = async (): Promise<void> => {
   const configuration = loadConfiguration();
@@ -39,6 +40,7 @@ const main = async (): Promise<void> => {
     let nextAssetIdentitySyncAt = 0;
     let nextTokenImageSyncAt = 0;
     let nextFactorySyncAt = 0;
+    let nextTokenImageCleanupScanAt = 0;
 
     while (!controller.signal.aborted) {
       try {
@@ -50,6 +52,13 @@ const main = async (): Promise<void> => {
         if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
           await finalizeTokenImages(configuration);
           nextTokenImageSyncAt = Date.now() + 60_000;
+        }
+        if (
+          Date.now() >= nextTokenImageCleanupScanAt &&
+          Date.now() < nextFactorySyncAt
+        ) {
+          await markTokenImagesForCleanup(configuration);
+          nextTokenImageCleanupScanAt = Date.now() + 60 * 60_000;
         }
         await refreshLaunchState(
           reader,
