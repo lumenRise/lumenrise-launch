@@ -38,15 +38,27 @@ const main = async (): Promise<void> => {
 
     let nextAssetIdentitySyncAt = 0;
     let nextTokenImageSyncAt = 0;
+    let nextFactorySyncAt = 0;
 
     while (!controller.signal.aborted) {
       try {
-        const added = await syncFactory(reader, store, configuration);
+        let added = 0;
+        if (Date.now() >= nextFactorySyncAt) {
+          added = await syncFactory(reader, store, configuration);
+          nextFactorySyncAt = Date.now() + 30_000;
+        }
         if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
           await finalizeTokenImages(configuration);
           nextTokenImageSyncAt = Date.now() + 60_000;
         }
-        await refreshLaunchState(reader, store);
+        await refreshLaunchState(
+          reader,
+          store,
+          new Date(),
+          (error, contractId) => {
+            log.warn({ error, contractId }, 'Launch state refresh failed');
+          },
+        );
 
         if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
           nextAssetIdentitySyncAt = Date.now() + 15 * 60 * 1000;

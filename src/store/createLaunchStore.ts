@@ -23,7 +23,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           factoryIndex: launch.factoryIndex,
           contractId: launch.contractId,
         },
-        { $setOnInsert: launch },
+        { $setOnInsert: { ...launch, nextStatePollAt: new Date(0) } },
         { upsert: true },
       );
     },
@@ -36,33 +36,54 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       );
     },
 
-    nextStateIndex: async () => {
-      const cursor = await FactoryCursor.findOne(identity).lean();
+    dueStateTargets: async (now, limit) => {
+      const launches = await Launch.find({
+        ...identity,
+        $or: [
+          { nextStatePollAt: { $lte: now } },
+          { nextStatePollAt: { $exists: false } },
+        ],
+      })
+        .sort({ nextStatePollAt: 1, factoryIndex: 1 })
+        .limit(limit)
+        .select('factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated')
+        .lean();
 
-      return cursor?.nextStateIndex ?? 1;
+      return launches.map((launch) => {
+        const params = (launch.config as { params?: Record<string, unknown> }).params;
+        if (typeof params?.starts_at !== 'string' || typeof params.ends_at !== 'string') {
+          throw new Error(`Launch ${launch.factoryIndex} has invalid schedule`);
+        }
+        return {
+          factoryIndex: launch.factoryIndex,
+          contractId: launch.contractId,
+          startsAt: params.starts_at,
+          endsAt: params.ends_at,
+          graduated: launch.state.graduated === true,
+        };
+      });
     },
 
-    refreshState: async (index, state, ledger) => {
+    refreshState: async (index, state, ledger, nextPollAt) => {
       const result = await Launch.updateOne(
-        { ...identity, factoryIndex: index },
+        { ...identity, factoryIndex: index, stateAsOfLedger: { $lte: ledger } },
         {
-          $set: { state, stateAsOfLedger: ledger, stateObservedAt: new Date() },
+          $set: { state, stateAsOfLedger: ledger, stateObservedAt: new Date(), nextStatePollAt: nextPollAt },
         },
       );
 
       if (result.matchedCount !== 1) {
-        throw new Error(`Launch ${index} is not indexed`);
+        const newer = await Launch.exists({ ...identity, factoryIndex: index, stateAsOfLedger: { $gt: ledger } });
+        if (!newer) { throw new Error(`Launch ${index} is not indexed`); }
+        await Launch.updateOne(
+          { ...identity, factoryIndex: index, stateAsOfLedger: { $gt: ledger } },
+          { $set: { nextStatePollAt: nextPollAt } },
+        );
       }
     },
 
-    advanceState: async (nextStateIndex) => {
-      const result = await FactoryCursor.updateOne(identity, {
-        $set: { nextStateIndex },
-      });
-
-      if (result.matchedCount !== 1) {
-        throw new Error('Factory cursor is missing');
-      }
+    deferStateTarget: async (index, nextPollAt) => {
+      await Launch.updateOne({ ...identity, factoryIndex: index }, { $set: { nextStatePollAt: nextPollAt } });
     },
   };
 };

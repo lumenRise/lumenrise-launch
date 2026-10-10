@@ -18,6 +18,15 @@ interface LaunchData {
   observedAt: Date;
   stateAsOfLedger: number;
   stateObservedAt: Date;
+  nextStatePollAt?: Date;
+}
+
+interface StateTarget {
+  factoryIndex: number;
+  contractId: string;
+  startsAt: string;
+  endsAt: string;
+  graduated: boolean;
 }
 
 interface LaunchReader {
@@ -31,9 +40,14 @@ interface LaunchStore {
   nextIndex(): Promise<number>;
   save(launch: LaunchData): Promise<void>;
   advance(nextIndex: number): Promise<void>;
-  nextStateIndex(): Promise<number>;
-  refreshState(index: number, state: Record<string, unknown>, ledger: number): Promise<void>;
-  advanceState(nextIndex: number): Promise<void>;
+  dueStateTargets(now: Date, limit: number): Promise<StateTarget[]>;
+  refreshState(
+    index: number,
+    state: Record<string, unknown>,
+    ledger: number,
+    nextPollAt: Date,
+  ): Promise<void>;
+  deferStateTarget(index: number, nextPollAt: Date): Promise<void>;
 }
 
-export type { ChainRead, LaunchData, LaunchReader, LaunchStore };
+export type { ChainRead, LaunchData, LaunchReader, LaunchStore, StateTarget };

@@ -1,30 +1,43 @@
+import nextStatePollAt from './nextStatePollAt';
 import parseLaunchState from './chain/parseLaunchState';
 import type { LaunchReader, LaunchStore } from './types/launch';
 
-const refreshLaunchState = async (reader: LaunchReader, store: LaunchStore): Promise<void> => {
-  const { value: count } = await reader.launchCount();
+const refreshLaunchState = async (
+  reader: LaunchReader,
+  store: LaunchStore,
+  now = new Date(),
+  onError?: (error: unknown, contractId: string) => void,
+): Promise<number> => {
+  const targets = await store.dueStateTargets(now, 2);
+  let refreshed = 0;
 
-  if (count === 0) {
-    return;
+  for (const target of targets) {
+    try {
+      const { value, ledger } = await reader.launchState(target.contractId);
+      const state = parseLaunchState(value);
+
+      await store.refreshState(
+        target.factoryIndex,
+        state,
+        ledger,
+        nextStatePollAt(target, state.graduated === true, now),
+      );
+
+      refreshed += 1;
+    } catch (error) {
+      onError?.(error, target.contractId);
+      try {
+        await store.deferStateTarget(
+          target.factoryIndex,
+          new Date(now.getTime() + 30_000),
+        );
+      } catch (deferError) {
+        onError?.(deferError, target.contractId);
+      }
+    }
   }
 
-  const index = await store.nextStateIndex();
-
-  if (!Number.isInteger(index) || index < 1) {
-    throw new Error('Factory state cursor is invalid');
-  }
-
-  const current = index > count ? 1 : index;
-  const { value: contractId } = await reader.launchAt(current);
-
-  if (!contractId) {
-    throw new Error(`Factory launch ${current} is missing`);
-  }
-
-  const { value, ledger } = await reader.launchState(contractId);
-
-  await store.refreshState(current, parseLaunchState(value), ledger);
-  await store.advanceState(current === count ? 1 : current + 1);
+  return refreshed;
 };
 
 export default refreshLaunchState;

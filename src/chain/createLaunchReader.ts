@@ -18,9 +18,20 @@ const createLaunchReader = async (
     throw new Error('Stellar RPC network does not match STELLAR_AUTH_NETWORK');
   }
 
+  let cachedSource: Awaited<ReturnType<typeof server.getAccount>> | undefined;
+  let sourceExpiresAt = 0;
+
+  const getSource = async () => {
+    if (!cachedSource || Date.now() >= sourceExpiresAt) {
+      cachedSource = await server.getAccount(configuration.observerAddress);
+      sourceExpiresAt = Date.now() + 30_000;
+    }
+    return cachedSource;
+  };
+
   return {
     launchCount: async () => {
-      const source = await server.getAccount(configuration.observerAddress);
+      const source = await getSource();
       const read = await readContract(
         server,
         source,
@@ -41,7 +52,7 @@ const createLaunchReader = async (
     },
 
     launchAt: async (index) => {
-      const source = await server.getAccount(configuration.observerAddress);
+      const source = await getSource();
       const read = await readContract(
         server,
         source,
@@ -61,7 +72,7 @@ const createLaunchReader = async (
     },
 
     launchConfig: async (contractId) => {
-      const source = await server.getAccount(configuration.observerAddress);
+      const source = await getSource();
 
       return readContract(
         server,
@@ -73,7 +84,7 @@ const createLaunchReader = async (
     },
 
     launchState: async (contractId) => {
-      const source = await server.getAccount(configuration.observerAddress);
+      const source = await getSource();
 
       return readContract(
         server,

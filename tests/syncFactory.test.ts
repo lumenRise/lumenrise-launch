@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 
 import syncFactory from '../src/syncFactory';
+import nextStatePollAt from '../src/nextStatePollAt';
 import refreshLaunchState from '../src/refreshLaunchState';
 import type { Configuration } from '../src/types/configuration';
 import type { LaunchData, LaunchReader, LaunchStore } from '../src/types';
@@ -25,13 +26,31 @@ const configuration: Configuration = {
 
 const config = {
   factory: factoryContractId,
-  params: { owner, asset, pair, metadata: { name: 'Launch', description: '', logo: '', symbol: 'LAUNCH' } },
+  platform: owner,
+  platform_fee_bps: 100,
+  params: {
+    owner, asset, pair,
+    metadata: { name: 'Launch', description: '', logo: '', symbol: 'LAUNCH' },
+    allocations: { pool_bps: 2000, curve_bps: 7000, team_bps: 1000 },
+    vesting: { cliff_seconds: 0n, duration_seconds: 2_592_000n, schedule: { tag: 'Weekly' } },
+    curve: {
+      virtual_base_reserve: 21_000_000n,
+      virtual_quote_reserve: 21_000_000n,
+      graduation_target: 4_000_000n,
+      creator_fee_bps: 10,
+      creator_payout_bps: 1000,
+    },
+    starts_at: 1_800_000_000n,
+    ends_at: 1_801_209_600n,
+  },
   total_supply: 10000000n,
+  buckets: { pool: 2_000_000n, curve: 7_000_000n, team: 1_000_000n },
 };
 
 const state = {
   sold: 0n,
   quote_reserve: 0n,
+  creator_fees: 0n,
   team_claimed: 0n,
   buyer_count: 0,
   graduated: false,
@@ -63,9 +82,9 @@ describe('syncFactory', () => {
       advance: async (index) => {
         nextIndex = index;
       },
-      nextStateIndex: async () => 1,
+      dueStateTargets: async () => [],
       refreshState: async () => {},
-      advanceState: async () => {},
+      deferStateTarget: async () => {},
     };
 
     await expect(syncFactory(reader, store, configuration)).rejects.toThrow('temporary database error');
@@ -74,7 +93,9 @@ describe('syncFactory', () => {
     expect(await syncFactory(reader, store, configuration)).toBe(0);
     expect(saved.size).toBe(1);
     expect(saved.get(1)?.config.total_supply).toBe('10000000');
+    expect((saved.get(1)?.config.params as { curve: { graduation_target: string } }).curve.graduation_target).toBe('4000000');
     expect(saved.get(1)?.state.sold).toBe('0');
+    expect(saved.get(1)?.state.creator_fees).toBe('0');
     expect(nextIndex).toBe(2);
   });
 
@@ -94,46 +115,100 @@ describe('syncFactory', () => {
       advance: async () => {
         throw new Error('must not advance');
       },
-      nextStateIndex: async () => 1,
+      dueStateTargets: async () => [],
       refreshState: async () => {
         throw new Error('must not refresh');
       },
-      advanceState: async () => {
-        throw new Error('must not advance');
-      },
+      deferStateTarget: async () => {},
     };
 
     await expect(syncFactory(reader, store, configuration)).rejects.toThrow('Invalid on-chain launch config');
   });
 
-  it('refreshes one launch state and only then advances its refresh cursor', async () => {
-    let nextStateIndex = 1;
+  it('refreshes only due launches with a bounded number of contract reads', async () => {
     let savedState: Record<string, unknown> | null = null;
+    let nextPollAt: Date | null = null;
+    let stateReads = 0;
+    const now = new Date(1_800_000_000_000);
 
     const reader: LaunchReader = {
-      launchCount: async () => ({ value: 1, ledger: 110 }),
-      launchAt: async () => ({ value: childContractId, ledger: 110 }),
+      launchCount: async () => { throw new Error('unneeded count read'); },
+      launchAt: async () => { throw new Error('unneeded factory lookup'); },
       launchConfig: async () => ({ value: config, ledger: 110 }),
-      launchState: async () => ({ value: { ...state, sold: 100n }, ledger: 111 }),
+      launchState: async () => { stateReads += 1; return { value: { ...state, sold: 100n }, ledger: 111 }; },
     };
 
     const store: LaunchStore = {
       nextIndex: async () => 2,
       save: async () => {},
       advance: async () => {},
-      nextStateIndex: async () => nextStateIndex,
-      refreshState: async (_index, value) => {
+      dueStateTargets: async (_now, limit) => {
+        expect(limit).toBe(2);
+        return [{ factoryIndex: 1, contractId: childContractId, startsAt: '1800000000', endsAt: '1801209600', graduated: false }];
+      },
+      refreshState: async (_index, value, _ledger, next) => {
         savedState = value;
+        nextPollAt = next;
       },
-      advanceState: async (index) => {
-        expect(savedState).not.toBeNull();
-        nextStateIndex = index;
-      },
+      deferStateTarget: async () => { throw new Error('must not defer'); },
     };
 
-    await refreshLaunchState(reader, store);
+    expect(await refreshLaunchState(reader, store, now)).toBe(1);
 
     expect(savedState).toMatchObject({ sold: '100' });
-    expect(nextStateIndex).toBe(1);
+    expect(nextPollAt).toEqual(new Date(now.getTime() + 20_000));
+    expect(stateReads).toBe(1);
+  });
+
+  it('uses slower intervals for closed curves and retries an RPC failure later', async () => {
+    const now = new Date(1_800_000_000_000);
+    const target = { factoryIndex: 1, contractId: childContractId, startsAt: '1790000000', endsAt: '1791000000', graduated: false };
+    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 60_000));
+    expect(nextStatePollAt(target, true, now)).toEqual(new Date(now.getTime() + 300_000));
+
+    let deferred: Date | null = null;
+    const reader: LaunchReader = {
+      launchCount: async () => { throw new Error('unneeded count read'); },
+      launchAt: async () => { throw new Error('unneeded factory lookup'); },
+      launchConfig: async () => { throw new Error('unneeded config read'); },
+      launchState: async () => { throw new Error('temporary RPC error'); },
+    };
+    const store: LaunchStore = {
+      nextIndex: async () => 2, save: async () => {}, advance: async () => {},
+      dueStateTargets: async () => [target],
+      refreshState: async () => { throw new Error('must not save'); },
+      deferStateTarget: async (_index, next) => { deferred = next; },
+    };
+    expect(await refreshLaunchState(reader, store, now)).toBe(0);
+    expect(deferred).toEqual(new Date(now.getTime() + 30_000));
+  });
+
+  it('continues with the next launch when retry scheduling also fails', async () => {
+    const now = new Date(1_800_000_000_000);
+    const targets = [1, 2].map((factoryIndex) => ({
+      factoryIndex, contractId: `${childContractId}-${factoryIndex}`,
+      startsAt: '1800000000', endsAt: '1801209600', graduated: false,
+    }));
+    const errors: unknown[] = [];
+    const refreshed: number[] = [];
+    const reader: LaunchReader = {
+      launchCount: async () => { throw new Error('unneeded count read'); },
+      launchAt: async () => { throw new Error('unneeded factory lookup'); },
+      launchConfig: async () => { throw new Error('unneeded config read'); },
+      launchState: async (contractId) => {
+        if (contractId === targets[0].contractId) { throw new Error('RPC failed'); }
+        return { value: state, ledger: 111 };
+      },
+    };
+    const store: LaunchStore = {
+      nextIndex: async () => 3, save: async () => {}, advance: async () => {},
+      dueStateTargets: async () => targets,
+      refreshState: async (index) => { refreshed.push(index); },
+      deferStateTarget: async () => { throw new Error('Database failed'); },
+    };
+
+    expect(await refreshLaunchState(reader, store, now, (error) => errors.push(error))).toBe(1);
+    expect(refreshed).toEqual([2]);
+    expect(errors).toHaveLength(2);
   });
 });
