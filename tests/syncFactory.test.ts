@@ -64,6 +64,7 @@ describe('syncFactory', () => {
     const saved = new Map<number, LaunchData>();
 
     const reader: LaunchReader = {
+      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: config, ledger: 101 }),
@@ -101,6 +102,7 @@ describe('syncFactory', () => {
 
   it('rejects a child whose config belongs to another factory', async () => {
     const reader: LaunchReader = {
+      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: { ...config, factory: asset }, ledger: 101 }),
@@ -132,6 +134,7 @@ describe('syncFactory', () => {
     const now = new Date(1_800_000_000_000);
 
     const reader: LaunchReader = {
+      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => { throw new Error('unneeded count read'); },
       launchAt: async () => { throw new Error('unneeded factory lookup'); },
       launchConfig: async () => ({ value: config, ledger: 110 }),
@@ -168,6 +171,7 @@ describe('syncFactory', () => {
 
     let deferred: Date | null = null;
     const reader: LaunchReader = {
+      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => { throw new Error('unneeded count read'); },
       launchAt: async () => { throw new Error('unneeded factory lookup'); },
       launchConfig: async () => { throw new Error('unneeded config read'); },
@@ -192,6 +196,7 @@ describe('syncFactory', () => {
     const errors: unknown[] = [];
     const refreshed: number[] = [];
     const reader: LaunchReader = {
+      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => { throw new Error('unneeded count read'); },
       launchAt: async () => { throw new Error('unneeded factory lookup'); },
       launchConfig: async () => { throw new Error('unneeded config read'); },
