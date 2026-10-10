@@ -8,6 +8,7 @@ import FactoryCursor from './store/FactoryCursor';
 import AssetIdentity from './store/AssetIdentity';
 import { loadConfiguration } from './configuration';
 import refreshLaunchState from './refreshLaunchState';
+import finalizeTokenImages from './finalizeTokenImages';
 import syncAssetIdentities from './syncAssetIdentities';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
@@ -36,10 +37,15 @@ const main = async (): Promise<void> => {
     );
 
     let nextAssetIdentitySyncAt = 0;
+    let nextTokenImageSyncAt = 0;
 
     while (!controller.signal.aborted) {
       try {
         const added = await syncFactory(reader, store, configuration);
+        if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
+          await finalizeTokenImages(configuration);
+          nextTokenImageSyncAt = Date.now() + 60_000;
+        }
         await refreshLaunchState(reader, store);
 
         if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
