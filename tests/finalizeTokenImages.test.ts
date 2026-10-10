@@ -25,7 +25,7 @@ describe('token image finalization', () => {
       network: 'testnet', owner: image.ownerAddress, 'metadata.logo': image.publicUrl,
     });
     expect(TokenImage.updateOne).toHaveBeenCalledWith(
-      { _id: image._id, status: 'pending' },
+      { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
       { $set: expect.objectContaining({ status: 'finalized', launchContractId: 'CLAUNCH', assetContractId: 'CASSET' }) },
     );
   });

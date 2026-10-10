@@ -7,7 +7,7 @@ const finalizeTokenImages = async (
 ): Promise<void> => {
   const pending = await TokenImage.find({
     network: configuration.network,
-    status: 'pending',
+    status: { $in: ['pending', 'cleanup_ready'] },
   }).lean();
 
   for (const image of pending) {
@@ -22,13 +22,15 @@ const finalizeTokenImages = async (
     }
 
     await TokenImage.updateOne(
-      { _id: image._id, status: 'pending' },
+      { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
       {
         $set: {
           status: 'finalized',
           launchContractId: launch.contractId,
           assetContractId: launch.asset,
           finalizedAt: new Date(),
+          cleanupReadyAt: null,
+          cleanupNextAt: null,
         },
       },
     );
