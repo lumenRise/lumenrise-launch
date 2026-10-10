@@ -4,12 +4,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import log from './logger';
 import Launch from './store/Launch';
 import syncFactory from './syncFactory';
+import LaunchDraft from './store/LaunchDraft';
 import FactoryCursor from './store/FactoryCursor';
 import AssetIdentity from './store/AssetIdentity';
 import { loadConfiguration } from './configuration';
 import refreshLaunchState from './refreshLaunchState';
 import finalizeTokenImages from './finalizeTokenImages';
 import syncAssetIdentities from './syncAssetIdentities';
+import finalizeLaunchDrafts from './finalizeLaunchDrafts';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
 import markTokenImagesForCleanup from './markTokenImagesForCleanup';
@@ -27,7 +29,7 @@ const main = async (): Promise<void> => {
   log.info({ database: configuration.dbName }, 'Launch database connected');
 
   try {
-    await Promise.all([Launch.createIndexes(), FactoryCursor.createIndexes(), AssetIdentity.createIndexes()]);
+    await Promise.all([Launch.createIndexes(), LaunchDraft.createIndexes(), FactoryCursor.createIndexes(), AssetIdentity.createIndexes()]);
 
     const reader = await createLaunchReader(configuration);
     const store = createLaunchStore(configuration);
@@ -41,6 +43,7 @@ const main = async (): Promise<void> => {
     let nextTokenImageSyncAt = 0;
     let nextFactorySyncAt = 0;
     let nextTokenImageCleanupScanAt = 0;
+    let nextLaunchDraftSyncAt = 0;
 
     while (!controller.signal.aborted) {
       try {
@@ -52,6 +55,10 @@ const main = async (): Promise<void> => {
         if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
           await finalizeTokenImages(configuration);
           nextTokenImageSyncAt = Date.now() + 60_000;
+        }
+        if (added > 0 || Date.now() >= nextLaunchDraftSyncAt) {
+          await finalizeLaunchDrafts(configuration, reader);
+          nextLaunchDraftSyncAt = Date.now() + 60_000;
         }
         if (
           Date.now() >= nextTokenImageCleanupScanAt &&
