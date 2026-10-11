@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  launch:
+    build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DB_URI: mongodb://mongo:27017/?replicaSet=rs0
+      DB_NAME: ${DB_NAME:-lumenrise}
+      STELLAR_AUTH_NETWORK: ${STELLAR_AUTH_NETWORK:-testnet}
+networks:
+  default:
+    name: lumenrise
+    external: true
