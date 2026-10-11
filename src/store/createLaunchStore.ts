@@ -1,6 +1,7 @@
 import Launch from './Launch';
 import FactoryCursor from './FactoryCursor';
 import type { LaunchStore } from '../types/launch';
+import recordLaunchPrice from '../recordLaunchPrice';
 import type { Configuration } from '../types/configuration';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
@@ -26,6 +27,8 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
         { $setOnInsert: { ...launch, nextStatePollAt: new Date(0) } },
         { upsert: true },
       );
+
+      await recordLaunchPrice(launch);
     },
 
     advance: async (nextIndex) => {
@@ -51,9 +54,11 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
 
       return launches.map((launch) => {
         const params = (launch.config as { params?: Record<string, unknown> }).params;
+
         if (typeof params?.starts_at !== 'string' || typeof params.ends_at !== 'string') {
           throw new Error(`Launch ${launch.factoryIndex} has invalid schedule`);
         }
+
         return {
           factoryIndex: launch.factoryIndex,
           contractId: launch.contractId,
@@ -73,12 +78,33 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       );
 
       if (result.matchedCount !== 1) {
-        const newer = await Launch.exists({ ...identity, factoryIndex: index, stateAsOfLedger: { $gt: ledger } });
-        if (!newer) { throw new Error(`Launch ${index} is not indexed`); }
+        const newer = await Launch.exists({
+          ...identity,
+          factoryIndex: index,
+          stateAsOfLedger: { $gt: ledger },
+        });
+
+        if (!newer) {
+          throw new Error(`Launch ${index} is not indexed`);
+        }
+
         await Launch.updateOne(
-          { ...identity, factoryIndex: index, stateAsOfLedger: { $gt: ledger } },
+          {
+            ...identity,
+            factoryIndex: index,
+            stateAsOfLedger: { $gt: ledger },
+          },
           { $set: { nextStatePollAt: nextPollAt } },
         );
+      } else {
+        const launch = await Launch.findOne({
+          ...identity,
+          factoryIndex: index,
+        }).lean();
+
+        if (launch) {
+          await recordLaunchPrice(launch);
+        }
       }
     },
 

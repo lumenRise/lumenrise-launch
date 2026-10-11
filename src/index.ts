@@ -1,16 +1,21 @@
 import mongoose from 'mongoose';
+import { rpc } from '@stellar/stellar-sdk';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import log from './logger';
 import Launch from './store/Launch';
 import syncFactory from './syncFactory';
+import LaunchTrade from './store/LaunchTrade';
 import LaunchDraft from './store/LaunchDraft';
+import syncLaunchTrades from './syncLaunchTrades';
 import FactoryCursor from './store/FactoryCursor';
 import AssetIdentity from './store/AssetIdentity';
 import { loadConfiguration } from './configuration';
 import refreshLaunchState from './refreshLaunchState';
 import finalizeTokenImages from './finalizeTokenImages';
 import syncAssetIdentities from './syncAssetIdentities';
+import LaunchPriceSample from './store/LaunchPriceSample';
+import LaunchTradeCursor from './store/LaunchTradeCursor';
 import finalizeLaunchDrafts from './finalizeLaunchDrafts';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
@@ -29,10 +34,22 @@ const main = async (): Promise<void> => {
   log.info({ database: configuration.dbName }, 'Launch database connected');
 
   try {
-    await Promise.all([Launch.createIndexes(), LaunchDraft.createIndexes(), FactoryCursor.createIndexes(), AssetIdentity.createIndexes()]);
+    await Promise.all([
+      Launch.createIndexes(),
+      LaunchDraft.createIndexes(),
+      FactoryCursor.createIndexes(),
+      AssetIdentity.createIndexes(),
+      LaunchTrade.createIndexes(),
+      LaunchPriceSample.createIndexes(),
+      LaunchTradeCursor.createIndexes(),
+    ]);
 
     const reader = await createLaunchReader(configuration);
     const store = createLaunchStore(configuration);
+    const tradeServer = new rpc.Server(configuration.rpcUrl, {
+      allowHttp: configuration.rpcUrl.startsWith('http:'),
+      timeout: 15_000,
+    });
 
     log.info(
       { network: configuration.network, factoryContractId: configuration.factoryContractId },
@@ -44,22 +61,27 @@ const main = async (): Promise<void> => {
     let nextFactorySyncAt = 0;
     let nextTokenImageCleanupScanAt = 0;
     let nextLaunchDraftSyncAt = 0;
+    let nextTradeSyncAt = 0;
 
     while (!controller.signal.aborted) {
       try {
         let added = 0;
+
         if (Date.now() >= nextFactorySyncAt) {
           added = await syncFactory(reader, store, configuration);
           nextFactorySyncAt = Date.now() + 30_000;
         }
+
         if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
           await finalizeTokenImages(configuration);
           nextTokenImageSyncAt = Date.now() + 60_000;
         }
+
         if (added > 0 || Date.now() >= nextLaunchDraftSyncAt) {
           await finalizeLaunchDrafts(configuration, reader);
           nextLaunchDraftSyncAt = Date.now() + 60_000;
         }
+
         if (
           Date.now() >= nextTokenImageCleanupScanAt &&
           Date.now() < nextFactorySyncAt
@@ -75,6 +97,14 @@ const main = async (): Promise<void> => {
             log.warn({ error, contractId }, 'Launch state refresh failed');
           },
         );
+        if (Date.now() >= nextTradeSyncAt) {
+          try {
+            await syncLaunchTrades(tradeServer, configuration);
+          } catch (error) {
+            log.warn({ error }, 'Trade ingestion deferred; cursor retained');
+          }
+          nextTradeSyncAt = Date.now() + 5000;
+        }
 
         if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
           nextAssetIdentitySyncAt = Date.now() + 15 * 60 * 1000;
@@ -83,12 +113,21 @@ const main = async (): Promise<void> => {
             await syncAssetIdentities(configuration);
             nextAssetIdentitySyncAt = Date.now() + 60 * 60 * 1000;
           } catch (error) {
-            log.warn({ error }, 'Asset identity sync is temporarily unavailable');
+            log.warn(
+              { error },
+              'Asset identity sync is temporarily unavailable',
+            );
           }
         }
 
         if (added > 0) {
-          log.info({ count: added, factoryContractId: configuration.factoryContractId }, 'Launches indexed');
+          log.info(
+            {
+              count: added,
+              factoryContractId: configuration.factoryContractId,
+            },
+            'Launches indexed',
+          );
         }
       } catch (error) {
         log.error({ error }, 'Launch sync failed');
