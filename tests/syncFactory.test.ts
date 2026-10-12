@@ -29,7 +29,9 @@ const config = {
   platform: owner,
   platform_fee_bps: 100,
   params: {
-    owner, asset, pair,
+    owner,
+    asset,
+    pair,
     metadata: { name: 'Launch', description: '', logo: '', symbol: 'LAUNCH' },
     allocations: { pool_bps: 2000, curve_bps: 7000, team_bps: 1000 },
     vesting: { cliff_seconds: 0n, duration_seconds: 2_592_000n, schedule: { tag: 'Weekly' } },
@@ -64,7 +66,6 @@ describe('syncFactory', () => {
     const saved = new Map<number, LaunchData>();
 
     const reader: LaunchReader = {
-      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: config, ledger: 101 }),
@@ -88,13 +89,18 @@ describe('syncFactory', () => {
       deferStateTarget: async () => {},
     };
 
-    await expect(syncFactory(reader, store, configuration)).rejects.toThrow('temporary database error');
+    await expect(syncFactory(reader, store, configuration)).rejects.toThrow(
+      'temporary database error',
+    );
     expect(nextIndex).toBe(1);
     expect(await syncFactory(reader, store, configuration)).toBe(1);
     expect(await syncFactory(reader, store, configuration)).toBe(0);
     expect(saved.size).toBe(1);
     expect(saved.get(1)?.config.total_supply).toBe('10000000');
-    expect((saved.get(1)?.config.params as { curve: { graduation_target: string } }).curve.graduation_target).toBe('4000000');
+    expect(
+      (saved.get(1)?.config.params as { curve: { graduation_target: string } }).curve
+        .graduation_target,
+    ).toBe('4000000');
     expect(saved.get(1)?.state.sold).toBe('0');
     expect(saved.get(1)?.state.creator_fees).toBe('0');
     expect(nextIndex).toBe(2);
@@ -102,7 +108,6 @@ describe('syncFactory', () => {
 
   it('rejects a child whose config belongs to another factory', async () => {
     const reader: LaunchReader = {
-      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: { ...config, factory: asset }, ledger: 101 }),
@@ -124,7 +129,9 @@ describe('syncFactory', () => {
       deferStateTarget: async () => {},
     };
 
-    await expect(syncFactory(reader, store, configuration)).rejects.toThrow('Invalid on-chain launch config');
+    await expect(syncFactory(reader, store, configuration)).rejects.toThrow(
+      'Invalid on-chain launch config',
+    );
   });
 
   it('refreshes only due launches with a bounded number of contract reads', async () => {
@@ -134,11 +141,17 @@ describe('syncFactory', () => {
     const now = new Date(1_800_000_000_000);
 
     const reader: LaunchReader = {
-      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
-      launchCount: async () => { throw new Error('unneeded count read'); },
-      launchAt: async () => { throw new Error('unneeded factory lookup'); },
+      launchCount: async () => {
+        throw new Error('unneeded count read');
+      },
+      launchAt: async () => {
+        throw new Error('unneeded factory lookup');
+      },
       launchConfig: async () => ({ value: config, ledger: 110 }),
-      launchState: async () => { stateReads += 1; return { value: { ...state, sold: 100n }, ledger: 111 }; },
+      launchState: async () => {
+        stateReads += 1;
+        return { value: { ...state, sold: 100n }, ledger: 111 };
+      },
     };
 
     const store: LaunchStore = {
@@ -147,13 +160,23 @@ describe('syncFactory', () => {
       advance: async () => {},
       dueStateTargets: async (_now, limit) => {
         expect(limit).toBe(2);
-        return [{ factoryIndex: 1, contractId: childContractId, startsAt: '1800000000', endsAt: '1801209600', graduated: false }];
+        return [
+          {
+            factoryIndex: 1,
+            contractId: childContractId,
+            startsAt: '1800000000',
+            endsAt: '1801209600',
+            graduated: false,
+          },
+        ];
       },
       refreshState: async (_index, value, _ledger, next) => {
         savedState = value;
         nextPollAt = next;
       },
-      deferStateTarget: async () => { throw new Error('must not defer'); },
+      deferStateTarget: async () => {
+        throw new Error('must not defer');
+      },
     };
 
     expect(await refreshLaunchState(reader, store, now)).toBe(1);
@@ -165,23 +188,42 @@ describe('syncFactory', () => {
 
   it('uses slower intervals for closed curves and retries an RPC failure later', async () => {
     const now = new Date(1_800_000_000_000);
-    const target = { factoryIndex: 1, contractId: childContractId, startsAt: '1790000000', endsAt: '1791000000', graduated: false };
+    const target = {
+      factoryIndex: 1,
+      contractId: childContractId,
+      startsAt: '1790000000',
+      endsAt: '1791000000',
+      graduated: false,
+    };
     expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 60_000));
     expect(nextStatePollAt(target, true, now)).toEqual(new Date(now.getTime() + 300_000));
 
     let deferred: Date | null = null;
     const reader: LaunchReader = {
-      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
-      launchCount: async () => { throw new Error('unneeded count read'); },
-      launchAt: async () => { throw new Error('unneeded factory lookup'); },
-      launchConfig: async () => { throw new Error('unneeded config read'); },
-      launchState: async () => { throw new Error('temporary RPC error'); },
+      launchCount: async () => {
+        throw new Error('unneeded count read');
+      },
+      launchAt: async () => {
+        throw new Error('unneeded factory lookup');
+      },
+      launchConfig: async () => {
+        throw new Error('unneeded config read');
+      },
+      launchState: async () => {
+        throw new Error('temporary RPC error');
+      },
     };
     const store: LaunchStore = {
-      nextIndex: async () => 2, save: async () => {}, advance: async () => {},
+      nextIndex: async () => 2,
+      save: async () => {},
+      advance: async () => {},
       dueStateTargets: async () => [target],
-      refreshState: async () => { throw new Error('must not save'); },
-      deferStateTarget: async (_index, next) => { deferred = next; },
+      refreshState: async () => {
+        throw new Error('must not save');
+      },
+      deferStateTarget: async (_index, next) => {
+        deferred = next;
+      },
     };
     expect(await refreshLaunchState(reader, store, now)).toBe(0);
     expect(deferred).toEqual(new Date(now.getTime() + 30_000));
@@ -190,26 +232,42 @@ describe('syncFactory', () => {
   it('continues with the next launch when retry scheduling also fails', async () => {
     const now = new Date(1_800_000_000_000);
     const targets = [1, 2].map((factoryIndex) => ({
-      factoryIndex, contractId: `${childContractId}-${factoryIndex}`,
-      startsAt: '1800000000', endsAt: '1801209600', graduated: false,
+      factoryIndex,
+      contractId: `${childContractId}-${factoryIndex}`,
+      startsAt: '1800000000',
+      endsAt: '1801209600',
+      graduated: false,
     }));
     const errors: unknown[] = [];
     const refreshed: number[] = [];
     const reader: LaunchReader = {
-      launchTransaction: async () => { throw new Error('unneeded transaction read'); },
-      launchCount: async () => { throw new Error('unneeded count read'); },
-      launchAt: async () => { throw new Error('unneeded factory lookup'); },
-      launchConfig: async () => { throw new Error('unneeded config read'); },
+      launchCount: async () => {
+        throw new Error('unneeded count read');
+      },
+      launchAt: async () => {
+        throw new Error('unneeded factory lookup');
+      },
+      launchConfig: async () => {
+        throw new Error('unneeded config read');
+      },
       launchState: async (contractId) => {
-        if (contractId === targets[0].contractId) { throw new Error('RPC failed'); }
+        if (contractId === targets[0].contractId) {
+          throw new Error('RPC failed');
+        }
         return { value: state, ledger: 111 };
       },
     };
     const store: LaunchStore = {
-      nextIndex: async () => 3, save: async () => {}, advance: async () => {},
+      nextIndex: async () => 3,
+      save: async () => {},
+      advance: async () => {},
       dueStateTargets: async () => targets,
-      refreshState: async (index) => { refreshed.push(index); },
-      deferStateTarget: async () => { throw new Error('Database failed'); },
+      refreshState: async (index) => {
+        refreshed.push(index);
+      },
+      deferStateTarget: async () => {
+        throw new Error('Database failed');
+      },
     };
 
     expect(await refreshLaunchState(reader, store, now, (error) => errors.push(error))).toBe(1);

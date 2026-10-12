@@ -30,13 +30,6 @@ interface StateTarget {
 }
 
 interface LaunchReader {
-  launchTransaction(
-    hash: string,
-  ): Promise<{
-    status: 'SUCCESS' | 'FAILED' | 'PENDING';
-    contractId: string | null;
-    params: unknown;
-  }>;
   launchCount(): Promise<ChainRead<number>>;
   launchAt(index: number): Promise<ChainRead<string | null>>;
   launchConfig(contractId: string): Promise<ChainRead<unknown>>;
