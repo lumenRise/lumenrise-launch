@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Asset, Keypair, Networks, StrKey } from '@stellar/stellar-sdk';
 
-import findAssetIssuer from '../src/chain/findAssetIssuer';
 import type { Configuration } from '../src/types/configuration';
+import findAssetIssuer from '../src/chain/findAssetIssuer';
 import resolveAssetIdentity from '../src/chain/resolveAssetIdentity';
 
 vi.mock('../src/chain/readContract', () => ({
@@ -21,24 +21,40 @@ describe('SAC asset identity', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('accepts an issuer only when its deterministic SAC ID matches the on-chain contract', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ _embedded: { records: [
-        { asset_code: 'TEST', asset_issuer: Keypair.random().publicKey() },
-        { asset_code: 'TEST', asset_issuer: issuer },
-      ] } }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          _embedded: {
+            records: [
+              { asset_code: 'TEST', asset_issuer: Keypair.random().publicKey() },
+              { asset_code: 'TEST', asset_issuer: issuer },
+            ],
+          },
+        }),
+      }),
+    );
 
     expect(await findAssetIssuer('TEST', contractId, configuration)).toBe(issuer);
-    expect(await findAssetIssuer('TEST', StrKey.encodeContract(Buffer.alloc(32, 7)), configuration)).toBeNull();
+    expect(
+      await findAssetIssuer('TEST', StrKey.encodeContract(Buffer.alloc(32, 7)), configuration),
+    ).toBeNull();
   });
 
   it('rejects a lookalike token contract even if its symbol matches', async () => {
-    const server = { getContractInstance: vi.fn().mockResolvedValue({
-      executable: { type: 'contractExecutableWasm' },
-    }) };
+    const server = {
+      getContractInstance: vi.fn().mockResolvedValue({
+        executable: { type: 'contractExecutableWasm' },
+      }),
+    };
 
-    const result = await resolveAssetIdentity(contractId, server as never, {} as never, configuration);
+    const result = await resolveAssetIdentity(
+      contractId,
+      server as never,
+      {} as never,
+      configuration,
+    );
 
     expect(result.status).toBe('unverified');
     expect(result.issuer).toBeNull();

@@ -1,8 +1,3 @@
-interface ChainRead<T> {
-  value: T;
-  ledger: number;
-}
-
 interface LaunchData {
   network: 'testnet' | 'public';
   factoryContractId: string;
@@ -18,7 +13,21 @@ interface LaunchData {
   observedAt: Date;
   stateAsOfLedger: number;
   stateObservedAt: Date;
-  nextStatePollAt?: Date;
+  nextStatePollAt?: Date | null;
+}
+
+interface ChainRead<T> {
+  value: T;
+  ledger: number;
+}
+
+interface LaunchReader {
+  network: 'testnet' | 'public';
+  launchCount(): Promise<ChainRead<number>>;
+  launchAt(index: number): Promise<ChainRead<string | null>>;
+  launchConfig(contractId: string): Promise<ChainRead<unknown>>;
+  launchState(contractId: string): Promise<ChainRead<unknown>>;
+  launchPrice(contractId: string): Promise<ChainRead<unknown>>;
 }
 
 interface StateTarget {
@@ -27,13 +36,7 @@ interface StateTarget {
   startsAt: string;
   endsAt: string;
   graduated: boolean;
-}
-
-interface LaunchReader {
-  launchCount(): Promise<ChainRead<number>>;
-  launchAt(index: number): Promise<ChainRead<string | null>>;
-  launchConfig(contractId: string): Promise<ChainRead<unknown>>;
-  launchState(contractId: string): Promise<ChainRead<unknown>>;
+  sold?: string;
 }
 
 interface LaunchStore {
@@ -45,7 +48,7 @@ interface LaunchStore {
     index: number,
     state: Record<string, unknown>,
     ledger: number,
-    nextPollAt: Date,
+    nextPollAt: Date | null,
   ): Promise<void>;
   deferStateTarget(index: number, nextPollAt: Date): Promise<void>;
 }

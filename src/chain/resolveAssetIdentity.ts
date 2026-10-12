@@ -39,6 +39,7 @@ const resolveAssetIdentity = async (
       contractId,
       'symbol',
     );
+
     const code = read.value;
 
     if (typeof code !== 'string' || !/^[A-Za-z0-9]{1,12}$/.test(code)) {

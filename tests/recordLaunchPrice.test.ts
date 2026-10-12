@@ -1,49 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LaunchData } from '../src/types/launch';
-import recordLaunchPrice from '../src/recordLaunchPrice';
 import LaunchPriceSample from '../src/store/LaunchPriceSample';
+import recordLaunchPrice from '../src/recordLaunchPrice';
 
-vi.mock('../src/store/LaunchPriceSample', () => ({
-  default: { updateOne: vi.fn() },
-}));
-const launch = {
-  network: 'testnet',
-  contractId: 'curve',
-  stateObservedAt: new Date('2026-10-11T00:01:35Z'),
-  stateAsOfLedger: 100,
-  config: {
-    params: {
-      curve: {
-        virtual_base_reserve: '3000000000',
-        virtual_quote_reserve: '3000000000',
+vi.mock('../src/store/LaunchPriceSample', () => ({ default: { updateOne: vi.fn() } }));
+const identity = { network: 'testnet' as const, contractId: 'curve' };
+describe('direct contract price observations', () => {
+  beforeEach(() => vi.resetAllMocks());
+  it('stores exact returned prices and preserves multiple observations in a minute', async () => {
+    const first = new Date('2026-10-11T00:01:35Z');
+    const second = new Date('2026-10-11T00:01:40Z');
+    await recordLaunchPrice(identity, { value: 9007199254740993n, ledger: 100 }, first);
+    await recordLaunchPrice(identity, { value: 9007199254740994n, ledger: 101 }, second);
+    expect(LaunchPriceSample.updateOne).toHaveBeenNthCalledWith(
+      1,
+      { ...identity, bucket: first },
+      {
+        $setOnInsert: expect.objectContaining({
+          sampledAt: first,
+          ledger: 100,
+          price: '9007199254740993',
+        }),
       },
-    },
-  },
-  state: { sold: '1000000000' },
-} as LaunchData;
-
-describe('sampled curve prices', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-  });
-  it('matches the contract marginal price and writes only one minute bucket', async () => {
-    await recordLaunchPrice(launch);
-    expect(LaunchPriceSample.updateOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        bucket: new Date('2026-10-11T00:01:00Z'),
-        ledger: { $lte: 100 },
-      }),
-      { $set: expect.objectContaining({ price: '22500000', ledger: 100 }) },
       { upsert: true },
     );
+    expect(LaunchPriceSample.updateOne).toHaveBeenNthCalledWith(
+      2,
+      { ...identity, bucket: second },
+      expect.anything(),
+      {
+        upsert: true,
+      },
+    );
   });
-  it('keeps a newer ledger sample but propagates storage failures for retry', async () => {
-    vi.mocked(LaunchPriceSample.updateOne).mockRejectedValueOnce({
-      code: 11000,
-    });
-    await expect(recordLaunchPrice(launch)).resolves.toBeUndefined();
-    vi.mocked(LaunchPriceSample.updateOne).mockRejectedValueOnce(new Error('storage down'));
-    await expect(recordLaunchPrice(launch)).rejects.toThrow('storage down');
+  it('rejects invalid prices and propagates failures for retry', async () => {
+    await expect(recordLaunchPrice(identity, { value: 0n, ledger: 1 })).rejects.toThrow();
+    expect(LaunchPriceSample.updateOne).not.toHaveBeenCalled();
+    vi.mocked(LaunchPriceSample.updateOne).mockRejectedValue(new Error('storage down'));
+    await expect(recordLaunchPrice(identity, { value: 1n, ledger: 1 })).rejects.toThrow(
+      'storage down',
+    );
   });
 });

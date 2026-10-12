@@ -12,9 +12,7 @@ const loadConfiguration = (): Configuration => {
   const pollIntervalMs = env.LAUNCH_POLL_INTERVAL_MS;
   const horizonUrl =
     env.STELLAR_HORIZON_URL ||
-    (network === 'testnet'
-      ? 'https://horizon-testnet.stellar.org'
-      : 'https://horizon.stellar.org');
+    (network === 'testnet' ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org');
 
   if (!StrKey.isValidContract(factoryContractId)) {
     throw new Error('LAUNCH_FACTORY_CONTRACT_ID must be a Stellar contract address');
@@ -42,8 +40,7 @@ const loadConfiguration = (): Configuration => {
 
   return {
     network,
-    networkPassphrase:
-      network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
+    networkPassphrase: network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
     factoryContractId,
     observerAddress,
     rpcUrl,

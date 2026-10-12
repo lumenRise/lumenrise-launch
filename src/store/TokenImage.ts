@@ -34,6 +34,7 @@ schema.index(
     name: 'token_images_asset_unique',
   },
 );
+
 schema.index(
   { network: 1, launchContractId: 1 },
   {

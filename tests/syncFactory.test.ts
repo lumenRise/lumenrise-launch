@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 
+import type { LaunchData } from '../src/types/launch';
 import syncFactory from '../src/syncFactory';
+import type { LaunchStore } from '../src/types/launch';
+import type { LaunchReader } from '../src/types/launch';
+import type { Configuration } from '../src/types/configuration';
 import nextStatePollAt from '../src/nextStatePollAt';
 import refreshLaunchState from '../src/refreshLaunchState';
-import type { Configuration } from '../src/types/configuration';
-import type { LaunchData, LaunchReader, LaunchStore } from '../src/types';
+
+vi.mock('../src/recordLaunchPrice', () => ({ default: vi.fn() }));
 
 const factoryContractId = StrKey.encodeContract(Buffer.alloc(32, 1));
 const childContractId = StrKey.encodeContract(Buffer.alloc(32, 2));
@@ -66,6 +70,8 @@ describe('syncFactory', () => {
     const saved = new Map<number, LaunchData>();
 
     const reader: LaunchReader = {
+      network: 'testnet',
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 111 }),
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: config, ledger: 101 }),
@@ -108,6 +114,8 @@ describe('syncFactory', () => {
 
   it('rejects a child whose config belongs to another factory', async () => {
     const reader: LaunchReader = {
+      network: 'testnet',
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 111 }),
       launchCount: async () => ({ value: 1, ledger: 100 }),
       launchAt: async () => ({ value: childContractId, ledger: 100 }),
       launchConfig: async () => ({ value: { ...config, factory: asset }, ledger: 101 }),
@@ -141,6 +149,8 @@ describe('syncFactory', () => {
     const now = new Date(1_800_000_000_000);
 
     const reader: LaunchReader = {
+      network: 'testnet',
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 111 }),
       launchCount: async () => {
         throw new Error('unneeded count read');
       },
@@ -182,7 +192,7 @@ describe('syncFactory', () => {
     expect(await refreshLaunchState(reader, store, now)).toBe(1);
 
     expect(savedState).toMatchObject({ sold: '100' });
-    expect(nextPollAt).toEqual(new Date(now.getTime() + 20_000));
+    expect(nextPollAt).toEqual(new Date(now.getTime() + 600_000));
     expect(stateReads).toBe(1);
   });
 
@@ -195,11 +205,17 @@ describe('syncFactory', () => {
       endsAt: '1791000000',
       graduated: false,
     };
-    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 60_000));
-    expect(nextStatePollAt(target, true, now)).toEqual(new Date(now.getTime() + 300_000));
+    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 600_000));
+    expect(nextStatePollAt(target, true, now)).toBeNull();
+    expect(nextStatePollAt(target, false, now, '0')).toBeNull();
+    expect(
+      nextStatePollAt({ ...target, startsAt: '1800000010', endsAt: '1800001000' }, false, now, '0'),
+    ).toEqual(new Date(now.getTime() + 10_000));
 
     let deferred: Date | null = null;
     const reader: LaunchReader = {
+      network: 'testnet',
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 111 }),
       launchCount: async () => {
         throw new Error('unneeded count read');
       },
@@ -241,6 +257,8 @@ describe('syncFactory', () => {
     const errors: unknown[] = [];
     const refreshed: number[] = [];
     const reader: LaunchReader = {
+      network: 'testnet',
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 111 }),
       launchCount: async () => {
         throw new Error('unneeded count read');
       },

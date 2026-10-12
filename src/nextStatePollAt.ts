@@ -4,25 +4,20 @@ const nextStatePollAt = (
   target: StateTarget,
   graduated: boolean,
   now: Date,
-): Date => {
-  const nowMs = now.getTime();
-  const nowSeconds = BigInt(Math.floor(nowMs / 1000));
-  const startsAt = BigInt(target.startsAt);
-  const endsAt = BigInt(target.endsAt);
+  sold = target.sold,
+): Date | null => {
+  const seconds = BigInt(Math.floor(now.getTime() / 1000));
 
-  if (graduated) {
-    return new Date(nowMs + 5 * 60_000);
+  if (graduated || (seconds >= BigInt(target.endsAt) && sold === '0')) {
+    return null;
   }
 
-  if (nowSeconds >= endsAt) {
-    return new Date(nowMs + 60_000);
-  }
+  const interval = 10 * 60_000;
+  const untilStart = BigInt(target.startsAt) - seconds;
 
-  if (nowSeconds < startsAt) {
-    const untilStartMs = Number((startsAt - nowSeconds) * 1000n);
-    return new Date(nowMs + Math.min(untilStartMs, 5 * 60_000));
-  }
-  return new Date(nowMs + 20_000);
+  return new Date(
+    now.getTime() + (untilStart > 0n ? Math.min(Number(untilStart * 1000n), interval) : interval),
+  );
 };
 
 export default nextStatePollAt;

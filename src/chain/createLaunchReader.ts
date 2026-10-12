@@ -1,4 +1,4 @@
-import { rpc, nativeToScVal } from '@stellar/stellar-sdk';
+import { Account, rpc, nativeToScVal } from '@stellar/stellar-sdk';
 
 import readContract from './readContract';
 import type { LaunchReader } from '../types/launch';
@@ -16,20 +16,13 @@ const createLaunchReader = async (configuration: Configuration): Promise<LaunchR
     throw new Error('Stellar RPC network does not match STELLAR_AUTH_NETWORK');
   }
 
-  let cachedSource: Awaited<ReturnType<typeof server.getAccount>> | undefined;
-  let sourceExpiresAt = 0;
-
-  const getSource = async () => {
-    if (!cachedSource || Date.now() >= sourceExpiresAt) {
-      cachedSource = await server.getAccount(configuration.observerAddress);
-      sourceExpiresAt = Date.now() + 30_000;
-    }
-    return cachedSource;
-  };
+  const getSource = () => new Account(configuration.observerAddress, '0');
 
   return {
+    network: configuration.network,
     launchCount: async () => {
-      const source = await getSource();
+      const source = getSource();
+
       const read = await readContract(
         server,
         source,
@@ -42,11 +35,16 @@ const createLaunchReader = async (configuration: Configuration): Promise<LaunchR
         throw new Error('Factory returned an invalid launch count');
       }
 
-      return { value: read.value, ledger: read.ledger };
+      return {
+        network: configuration.network,
+        value: read.value,
+        ledger: read.ledger,
+      };
     },
 
     launchAt: async (index) => {
-      const source = await getSource();
+      const source = getSource();
+
       const read = await readContract(
         server,
         source,
@@ -60,11 +58,15 @@ const createLaunchReader = async (configuration: Configuration): Promise<LaunchR
         throw new Error(`Factory returned an invalid launch address at ${index}`);
       }
 
-      return { value: read.value, ledger: read.ledger };
+      return {
+        network: configuration.network,
+        value: read.value,
+        ledger: read.ledger,
+      };
     },
 
     launchConfig: async (contractId) => {
-      const source = await getSource();
+      const source = getSource();
 
       return readContract(
         server,
@@ -75,8 +77,20 @@ const createLaunchReader = async (configuration: Configuration): Promise<LaunchR
       );
     },
 
+    launchPrice: async (contractId) => {
+      const source = getSource();
+
+      return readContract(
+        server,
+        source,
+        configuration.networkPassphrase,
+        contractId,
+        'current_price',
+      );
+    },
+
     launchState: async (contractId) => {
-      const source = await getSource();
+      const source = getSource();
 
       return readContract(server, source, configuration.networkPassphrase, contractId, 'get_state');
     },

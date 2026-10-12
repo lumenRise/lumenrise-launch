@@ -33,7 +33,7 @@ const launchSchema = new Schema<LaunchData>(
     observedAt: { type: Date, required: true },
     stateAsOfLedger: { type: Number, required: true, min: 1 },
     stateObservedAt: { type: Date, required: true },
-    nextStatePollAt: { type: Date, required: true, default: () => new Date(0) },
+    nextStatePollAt: { type: Date, default: () => new Date(0) },
   },
   { collection: 'launches', versionKey: false },
 );
@@ -49,6 +49,7 @@ launchSchema.index(
 );
 
 launchSchema.index({ network: 1, owner: 1, factoryIndex: -1 }, { name: 'launches_owner_list' });
+
 launchSchema.index(
   { network: 1, factoryContractId: 1, nextStatePollAt: 1, factoryIndex: 1 },
   { name: 'launches_state_poll_due' },

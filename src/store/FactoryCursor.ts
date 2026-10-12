@@ -4,7 +4,12 @@ import type { FactoryCursorRecord } from '../types/factoryCursor';
 
 const factoryCursorSchema = new Schema<FactoryCursorRecord>(
   {
-    network: { type: String, enum: ['testnet', 'public'], required: true, immutable: true },
+    network: {
+      type: String,
+      enum: ['testnet', 'public'],
+      required: true,
+      immutable: true,
+    },
     factoryContractId: { type: String, required: true, immutable: true },
     nextIndex: { type: Number, required: true, min: 1 },
     nextStateIndex: { type: Number, default: 1, min: 1 },

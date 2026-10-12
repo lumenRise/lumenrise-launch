@@ -1,6 +1,8 @@
+import recordLaunchPrice from './recordLaunchPrice';
+import type { LaunchStore } from './types/launch';
+import type { LaunchReader } from './types/launch';
 import nextStatePollAt from './nextStatePollAt';
 import parseLaunchState from './chain/parseLaunchState';
-import type { LaunchReader, LaunchStore } from './types/launch';
 
 const refreshLaunchState = async (
   reader: LaunchReader,
@@ -16,21 +18,39 @@ const refreshLaunchState = async (
       const { value, ledger } = await reader.launchState(target.contractId);
       const state = parseLaunchState(value);
 
+      const seconds = BigInt(Math.floor(now.getTime() / 1000));
+
+      const alreadyStopped =
+        target.graduated || (seconds >= BigInt(target.endsAt) && target.sold === '0');
+
+      const stoppedNow =
+        state.graduated === true || (seconds >= BigInt(target.endsAt) && state.sold === '0');
+
+      if (seconds >= BigInt(target.startsAt) && (!alreadyStopped || !stoppedNow)) {
+        const priceRead = await reader.launchPrice(target.contractId);
+
+        if (priceRead.ledger < ledger) {
+          throw new Error('RPC price observation is behind the state');
+        }
+
+        await recordLaunchPrice(
+          { network: reader.network, contractId: target.contractId },
+          priceRead,
+        );
+      }
+
       await store.refreshState(
         target.factoryIndex,
         state,
         ledger,
-        nextStatePollAt(target, state.graduated === true, now),
+        nextStatePollAt(target, state.graduated === true, now, String(state.sold)),
       );
 
       refreshed += 1;
     } catch (error) {
       onError?.(error, target.contractId);
       try {
-        await store.deferStateTarget(
-          target.factoryIndex,
-          new Date(now.getTime() + 30_000),
-        );
+        await store.deferStateTarget(target.factoryIndex, new Date(now.getTime() + 30_000));
       } catch (deferError) {
         onError?.(deferError, target.contractId);
       }

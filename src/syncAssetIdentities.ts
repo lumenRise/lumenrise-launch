@@ -2,16 +2,15 @@ import { rpc } from '@stellar/stellar-sdk';
 
 import Launch from './store/Launch';
 import AssetIdentity from './store/AssetIdentity';
-import type { Configuration } from './types/configuration';
 import checkHorizonNetwork from './chain/checkHorizonNetwork';
 import resolveAssetIdentity from './chain/resolveAssetIdentity';
+import type { Configuration } from './types/configuration';
 
-const syncAssetIdentities = async (
-  configuration: Configuration,
-): Promise<number> => {
+const syncAssetIdentities = async (configuration: Configuration): Promise<number> => {
   const assets = await Launch.distinct('asset', {
     network: configuration.network,
   });
+
   const retryBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const unavailableRetryBefore = new Date(Date.now() - 15 * 60 * 1000);
 
@@ -20,9 +19,7 @@ const syncAssetIdentities = async (
     assetContractId: { $in: assets },
   }).lean();
 
-  const byContract = new Map(
-    existing.map((item) => [item.assetContractId, item]),
-  );
+  const byContract = new Map(existing.map((item) => [item.assetContractId, item]));
 
   const pending = assets
     .filter((asset) => {
@@ -30,8 +27,7 @@ const syncAssetIdentities = async (
 
       return (
         !item ||
-        (item.status === 'unavailable' &&
-          item.identityCheckedAt < unavailableRetryBefore) ||
+        (item.status === 'unavailable' && item.identityCheckedAt < unavailableRetryBefore) ||
         (item.status === 'unverified' && item.identityCheckedAt < retryBefore)
       );
     })
@@ -52,20 +48,12 @@ const syncAssetIdentities = async (
     throw new Error('Stellar RPC network does not match STELLAR_AUTH_NETWORK');
   }
 
-  await checkHorizonNetwork(
-    configuration.horizonUrl,
-    configuration.networkPassphrase,
-  );
+  await checkHorizonNetwork(configuration.horizonUrl, configuration.networkPassphrase);
 
   const source = await server.getAccount(configuration.observerAddress);
 
   for (const asset of pending) {
-    const identity = await resolveAssetIdentity(
-      asset,
-      server,
-      source,
-      configuration,
-    );
+    const identity = await resolveAssetIdentity(asset, server, source, configuration);
 
     await AssetIdentity.updateOne(
       { network: configuration.network, assetContractId: asset },

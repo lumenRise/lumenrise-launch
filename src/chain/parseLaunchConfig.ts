@@ -1,12 +1,21 @@
 import { StrKey } from '@stellar/stellar-sdk';
 
+import parseLaunchState from './parseLaunchState';
 import toPlainValue from './toPlainValue';
 import type { LaunchData } from '../types/launch';
-import parseLaunchState from './parseLaunchState';
 import type { LaunchConfigInput } from '../types/launchConfig';
 
 const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
-  const { rawConfig, rawState, network, factoryContractId, factoryIndex, contractId, asOfLedger, stateAsOfLedger } = input;
+  const {
+    rawConfig,
+    rawState,
+    network,
+    factoryContractId,
+    factoryIndex,
+    contractId,
+    asOfLedger,
+    stateAsOfLedger,
+  } = input;
   const config = toPlainValue(rawConfig);
 
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
@@ -41,7 +50,10 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
     throw new Error('Launch config has invalid owner');
   }
 
-  if (!StrKey.isValidEd25519PublicKey(launchParams.owner) && !StrKey.isValidContract(launchParams.owner)) {
+  if (
+    !StrKey.isValidEd25519PublicKey(launchParams.owner) &&
+    !StrKey.isValidContract(launchParams.owner)
+  ) {
     throw new Error('Launch config has invalid owner');
   }
 

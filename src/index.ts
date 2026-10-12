@@ -1,23 +1,19 @@
+import LaunchPriceSample from './store/LaunchPriceSample';
+import AssetIdentity from './store/AssetIdentity';
+import FactoryCursor from './store/FactoryCursor';
+import TokenImage from './store/TokenImage';
+import Launch from './store/Launch';
 import mongoose from 'mongoose';
-import { rpc } from '@stellar/stellar-sdk';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import log from './logger';
-import Launch from './store/Launch';
 import syncFactory from './syncFactory';
-import TokenImage from './store/TokenImage';
-import LaunchTrade from './store/LaunchTrade';
-import syncLaunchTrades from './syncLaunchTrades';
-import FactoryCursor from './store/FactoryCursor';
-import AssetIdentity from './store/AssetIdentity';
-import { loadConfiguration } from './configuration';
-import refreshLaunchState from './refreshLaunchState';
-import finalizeTokenImages from './finalizeTokenImages';
-import syncAssetIdentities from './syncAssetIdentities';
-import LaunchPriceSample from './store/LaunchPriceSample';
-import LaunchTradeCursor from './store/LaunchTradeCursor';
 import createLaunchStore from './store/createLaunchStore';
+import refreshLaunchState from './refreshLaunchState';
 import createLaunchReader from './chain/createLaunchReader';
+import syncAssetIdentities from './syncAssetIdentities';
+import finalizeTokenImages from './finalizeTokenImages';
+import { loadConfiguration } from './configuration';
 import markTokenImagesForCleanup from './markTokenImagesForCleanup';
 
 const main = async (): Promise<void> => {
@@ -38,17 +34,11 @@ const main = async (): Promise<void> => {
       TokenImage.createIndexes(),
       FactoryCursor.createIndexes(),
       AssetIdentity.createIndexes(),
-      LaunchTrade.createIndexes(),
       LaunchPriceSample.createIndexes(),
-      LaunchTradeCursor.createIndexes(),
     ]);
 
     const reader = await createLaunchReader(configuration);
     const store = createLaunchStore(configuration);
-    const tradeServer = new rpc.Server(configuration.rpcUrl, {
-      allowHttp: configuration.rpcUrl.startsWith('http:'),
-      timeout: 15_000,
-    });
 
     log.info(
       {
@@ -62,7 +52,6 @@ const main = async (): Promise<void> => {
     let nextTokenImageSyncAt = 0;
     let nextFactorySyncAt = 0;
     let nextTokenImageCleanupScanAt = 0;
-    let nextTradeSyncAt = 0;
 
     while (!controller.signal.aborted) {
       try {
@@ -85,14 +74,6 @@ const main = async (): Promise<void> => {
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
           log.warn({ error, contractId }, 'Launch state refresh failed');
         });
-        if (Date.now() >= nextTradeSyncAt) {
-          try {
-            await syncLaunchTrades(tradeServer, configuration);
-          } catch (error) {
-            log.warn({ error }, 'Trade ingestion deferred; cursor retained');
-          }
-          nextTradeSyncAt = Date.now() + 5000;
-        }
 
         if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
           nextAssetIdentitySyncAt = Date.now() + 15 * 60 * 1000;
@@ -133,6 +114,7 @@ const main = async (): Promise<void> => {
     log.info('Launch database disconnected');
   }
 };
+
 
 void main().catch((error: unknown) => {
   log.fatal({ error }, 'Launch worker failed');

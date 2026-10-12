@@ -1,6 +1,7 @@
-import parseLaunchConfig from './chain/parseLaunchConfig';
+import type { LaunchStore } from './types/launch';
+import type { LaunchReader } from './types/launch';
 import type { Configuration } from './types/configuration';
-import type { LaunchReader, LaunchStore } from './types/launch';
+import parseLaunchConfig from './chain/parseLaunchConfig';
 
 const syncFactory = async (
   reader: LaunchReader,
@@ -8,6 +9,7 @@ const syncFactory = async (
   configuration: Configuration,
 ): Promise<number> => {
   const { value: count } = await reader.launchCount();
+
   let index = await store.nextIndex();
 
   if (!Number.isInteger(index) || index < 1 || index > count + 1) {
@@ -25,6 +27,7 @@ const syncFactory = async (
 
     const config = await reader.launchConfig(contractId);
     const state = await reader.launchState(contractId);
+
     const launch = parseLaunchConfig({
       rawConfig: config.value,
       rawState: state.value,

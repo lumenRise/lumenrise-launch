@@ -1,7 +1,6 @@
 import Launch from './Launch';
 import FactoryCursor from './FactoryCursor';
 import type { LaunchStore } from '../types/launch';
-import recordLaunchPrice from '../recordLaunchPrice';
 import type { Configuration } from '../types/configuration';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
@@ -27,8 +26,6 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
         { $setOnInsert: { ...launch, nextStatePollAt: new Date(0) } },
         { upsert: true },
       );
-
-      await recordLaunchPrice(launch);
     },
 
     advance: async (nextIndex) => {
@@ -42,14 +39,13 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
     dueStateTargets: async (now, limit) => {
       const launches = await Launch.find({
         ...identity,
-        $or: [
-          { nextStatePollAt: { $lte: now } },
-          { nextStatePollAt: { $exists: false } },
-        ],
+        $or: [{ nextStatePollAt: { $lte: now } }, { nextStatePollAt: { $exists: false } }],
       })
         .sort({ nextStatePollAt: 1, factoryIndex: 1 })
         .limit(limit)
-        .select('factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated')
+        .select(
+          'factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated state.sold',
+        )
         .lean();
 
       return launches.map((launch) => {
@@ -65,6 +61,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           startsAt: params.starts_at,
           endsAt: params.ends_at,
           graduated: launch.state.graduated === true,
+          sold: String(launch.state.sold),
         };
       });
     },
@@ -73,7 +70,12 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       const result = await Launch.updateOne(
         { ...identity, factoryIndex: index, stateAsOfLedger: { $lte: ledger } },
         {
-          $set: { state, stateAsOfLedger: ledger, stateObservedAt: new Date(), nextStatePollAt: nextPollAt },
+          $set: {
+            state,
+            stateAsOfLedger: ledger,
+            stateObservedAt: new Date(),
+            nextStatePollAt: nextPollAt,
+          },
         },
       );
 
@@ -88,28 +90,19 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           throw new Error(`Launch ${index} is not indexed`);
         }
 
-        await Launch.updateOne(
-          {
-            ...identity,
-            factoryIndex: index,
-            stateAsOfLedger: { $gt: ledger },
-          },
-          { $set: { nextStatePollAt: nextPollAt } },
-        );
-      } else {
-        const launch = await Launch.findOne({
-          ...identity,
-          factoryIndex: index,
-        }).lean();
-
-        if (launch) {
-          await recordLaunchPrice(launch);
-        }
+        // A newer API observation owns both the state and its poll schedule.
       }
     },
 
     deferStateTarget: async (index, nextPollAt) => {
-      await Launch.updateOne({ ...identity, factoryIndex: index }, { $set: { nextStatePollAt: nextPollAt } });
+      await Launch.updateOne(
+        {
+          ...identity,
+          factoryIndex: index,
+          $or: [{ nextStatePollAt: { $type: 'date' } }, { nextStatePollAt: { $exists: false } }],
+        },
+        { $set: { nextStatePollAt: nextPollAt } },
+      );
     },
   };
 };

@@ -33,9 +33,6 @@ assetIdentitySchema.index(
   },
 );
 
-const AssetIdentity = model<AssetIdentityRecord>(
-  'AssetIdentity',
-  assetIdentitySchema,
-);
+const AssetIdentity = model<AssetIdentityRecord>('AssetIdentity', assetIdentitySchema);
 
 export default AssetIdentity;

@@ -1,7 +1,7 @@
 import { Asset, StrKey } from '@stellar/stellar-sdk';
 
-import type { HorizonAssetPage } from '../types/horizon';
 import type { Configuration } from '../types/configuration';
+import type { HorizonAssetPage } from '../types/horizon';
 
 const findAssetIssuer = async (
   code: string,
@@ -29,10 +29,7 @@ const findAssetIssuer = async (
     }
 
     for (const record of records) {
-      if (
-        record.asset_code !== code ||
-        typeof record.asset_issuer !== 'string'
-      ) {
+      if (record.asset_code !== code || typeof record.asset_issuer !== 'string') {
         continue;
       }
 
@@ -41,9 +38,8 @@ const findAssetIssuer = async (
       }
 
       if (
-        new Asset(code, record.asset_issuer).contractId(
-          configuration.networkPassphrase,
-        ) === contractId
+        new Asset(code, record.asset_issuer).contractId(configuration.networkPassphrase) ===
+        contractId
       ) {
         return record.asset_issuer;
       }
