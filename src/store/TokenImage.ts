@@ -26,6 +26,23 @@ const schema = new Schema<TokenImageData>(
   { collection: 'token_images', versionKey: false },
 );
 
+schema.index(
+  { network: 1, assetContractId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { assetContractId: { $type: 'string' } },
+    name: 'token_images_asset_unique',
+  },
+);
+schema.index(
+  { network: 1, launchContractId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { launchContractId: { $type: 'string' } },
+    name: 'token_images_launch_unique',
+  },
+);
+
 const TokenImage = model<TokenImageData>('TokenImage', schema);
 
 export default TokenImage;

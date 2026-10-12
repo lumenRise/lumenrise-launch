@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import log from './logger';
 import Launch from './store/Launch';
 import syncFactory from './syncFactory';
+import TokenImage from './store/TokenImage';
 import LaunchTrade from './store/LaunchTrade';
 import syncLaunchTrades from './syncLaunchTrades';
 import FactoryCursor from './store/FactoryCursor';
@@ -34,6 +35,7 @@ const main = async (): Promise<void> => {
   try {
     await Promise.all([
       Launch.createIndexes(),
+      TokenImage.createIndexes(),
       FactoryCursor.createIndexes(),
       AssetIdentity.createIndexes(),
       LaunchTrade.createIndexes(),
