@@ -5,8 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import log from './logger';
 import Launch from './store/Launch';
 import syncFactory from './syncFactory';
+import TokenImage from './store/TokenImage';
 import LaunchTrade from './store/LaunchTrade';
-import LaunchDraft from './store/LaunchDraft';
 import syncLaunchTrades from './syncLaunchTrades';
 import FactoryCursor from './store/FactoryCursor';
 import AssetIdentity from './store/AssetIdentity';
@@ -16,7 +16,6 @@ import finalizeTokenImages from './finalizeTokenImages';
 import syncAssetIdentities from './syncAssetIdentities';
 import LaunchPriceSample from './store/LaunchPriceSample';
 import LaunchTradeCursor from './store/LaunchTradeCursor';
-import finalizeLaunchDrafts from './finalizeLaunchDrafts';
 import createLaunchStore from './store/createLaunchStore';
 import createLaunchReader from './chain/createLaunchReader';
 import markTokenImagesForCleanup from './markTokenImagesForCleanup';
@@ -36,7 +35,7 @@ const main = async (): Promise<void> => {
   try {
     await Promise.all([
       Launch.createIndexes(),
-      LaunchDraft.createIndexes(),
+      TokenImage.createIndexes(),
       FactoryCursor.createIndexes(),
       AssetIdentity.createIndexes(),
       LaunchTrade.createIndexes(),
@@ -52,7 +51,10 @@ const main = async (): Promise<void> => {
     });
 
     log.info(
-      { network: configuration.network, factoryContractId: configuration.factoryContractId },
+      {
+        network: configuration.network,
+        factoryContractId: configuration.factoryContractId,
+      },
       'Launch worker started',
     );
 
@@ -60,7 +62,6 @@ const main = async (): Promise<void> => {
     let nextTokenImageSyncAt = 0;
     let nextFactorySyncAt = 0;
     let nextTokenImageCleanupScanAt = 0;
-    let nextLaunchDraftSyncAt = 0;
     let nextTradeSyncAt = 0;
 
     while (!controller.signal.aborted) {
@@ -77,26 +78,13 @@ const main = async (): Promise<void> => {
           nextTokenImageSyncAt = Date.now() + 60_000;
         }
 
-        if (added > 0 || Date.now() >= nextLaunchDraftSyncAt) {
-          await finalizeLaunchDrafts(configuration, reader);
-          nextLaunchDraftSyncAt = Date.now() + 60_000;
-        }
-
-        if (
-          Date.now() >= nextTokenImageCleanupScanAt &&
-          Date.now() < nextFactorySyncAt
-        ) {
+        if (Date.now() >= nextTokenImageCleanupScanAt && Date.now() < nextFactorySyncAt) {
           await markTokenImagesForCleanup(configuration);
           nextTokenImageCleanupScanAt = Date.now() + 60 * 60_000;
         }
-        await refreshLaunchState(
-          reader,
-          store,
-          new Date(),
-          (error, contractId) => {
-            log.warn({ error, contractId }, 'Launch state refresh failed');
-          },
-        );
+        await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
+          log.warn({ error, contractId }, 'Launch state refresh failed');
+        });
         if (Date.now() >= nextTradeSyncAt) {
           try {
             await syncLaunchTrades(tradeServer, configuration);
@@ -113,10 +101,7 @@ const main = async (): Promise<void> => {
             await syncAssetIdentities(configuration);
             nextAssetIdentitySyncAt = Date.now() + 60 * 60 * 1000;
           } catch (error) {
-            log.warn(
-              { error },
-              'Asset identity sync is temporarily unavailable',
-            );
+            log.warn({ error }, 'Asset identity sync is temporarily unavailable');
           }
         }
 
@@ -134,7 +119,9 @@ const main = async (): Promise<void> => {
       }
 
       try {
-        await delay(configuration.pollIntervalMs, undefined, { signal: controller.signal });
+        await delay(configuration.pollIntervalMs, undefined, {
+          signal: controller.signal,
+        });
       } catch {
         if (!controller.signal.aborted) {
           throw new Error('Launch sync delay failed');
