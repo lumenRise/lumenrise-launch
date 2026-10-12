@@ -1,10 +1,9 @@
+import log from './logger';
 import Launch from './store/Launch';
 import TokenImage from './store/TokenImage';
 import type { Configuration } from './types/configuration';
 
-const finalizeTokenImages = async (
-  configuration: Configuration,
-): Promise<void> => {
+const finalizeTokenImages = async (configuration: Configuration): Promise<void> => {
   const pending = await TokenImage.find({
     network: configuration.network,
     status: { $in: ['pending', 'cleanup_ready'] },
@@ -21,19 +20,30 @@ const finalizeTokenImages = async (
       continue;
     }
 
-    await TokenImage.updateOne(
-      { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
-      {
-        $set: {
-          status: 'finalized',
-          launchContractId: launch.contractId,
-          assetContractId: launch.asset,
-          finalizedAt: new Date(),
-          cleanupReadyAt: null,
-          cleanupNextAt: null,
+    try {
+      await TokenImage.updateOne(
+        { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
+        {
+          $set: {
+            status: 'finalized',
+            launchContractId: launch.contractId,
+            assetContractId: launch.asset,
+            finalizedAt: new Date(),
+            cleanupReadyAt: null,
+            cleanupNextAt: null,
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
+        log.warn(
+          { imageId: image._id, assetContractId: launch.asset },
+          'Token already has a linked image',
+        );
+        continue;
+      }
+      throw error;
+    }
   }
 };
 
