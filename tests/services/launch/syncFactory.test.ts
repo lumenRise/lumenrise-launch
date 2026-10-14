@@ -9,6 +9,9 @@ import type { Configuration } from '../../../src/types/configuration';
 import nextStatePollAt from '../../../src/utils/launch/nextStatePollAt';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
+vi.mock('../../../src/models/LaunchPriceSample', () => ({
+  default: { exists: vi.fn().mockResolvedValue(null) },
+}));
 vi.mock('../../../src/services/launch/recordLaunchPrice', () => ({ default: vi.fn() }));
 
 const factoryContractId = StrKey.encodeContract(Buffer.alloc(32, 1));

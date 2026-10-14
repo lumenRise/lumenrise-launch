@@ -1,6 +1,7 @@
 import recordLaunchPrice from './recordLaunchPrice';
 import type { LaunchStore } from '../../types/launch/store';
 import type { LaunchReader } from '../../types/launch/reader';
+import LaunchPriceSample from '../../models/LaunchPriceSample';
 import nextStatePollAt from '../../utils/launch/nextStatePollAt';
 import parseLaunchState from '../../utils/launch/parseLaunchState';
 
@@ -20,13 +21,16 @@ const refreshLaunchState = async (
 
       const seconds = BigInt(Math.floor(now.getTime() / 1000));
 
-      const alreadyStopped =
-        target.graduated || (seconds >= BigInt(target.endsAt) && target.sold === '0');
+      const existingPrice =
+        seconds >= BigInt(target.startsAt)
+          ? await LaunchPriceSample.exists({
+              network: reader.network,
+              contractId: target.contractId,
+            })
+          : true;
 
-      const stoppedNow =
-        state.graduated === true || (seconds >= BigInt(target.endsAt) && state.sold === '0');
-
-      if (seconds >= BigInt(target.startsAt) && (!alreadyStopped || !stoppedNow)) {
+      // Seed once after opening; subsequent price reads are triggered by verified trades.
+      if (!existingPrice) {
         const priceRead = await reader.launchPrice(target.contractId);
 
         if (priceRead.ledger < ledger) {

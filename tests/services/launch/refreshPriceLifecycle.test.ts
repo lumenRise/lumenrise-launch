@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LaunchReader } from '../../../src/types/launch/reader';
+import LaunchPriceSample from '../../../src/models/LaunchPriceSample';
 import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 import type { LaunchStore, StateTarget } from '../../../src/types/launch/store';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
+vi.mock('../../../src/models/LaunchPriceSample', () => ({ default: { exists: vi.fn() } }));
 vi.mock('../../../src/services/launch/recordLaunchPrice', () => ({ default: vi.fn() }));
 const now = new Date('2026-10-12T00:00:00Z');
 const seconds = Math.floor(now.getTime() / 1000);
@@ -31,11 +33,12 @@ const refresh = () =>
 describe('contract price polling lifecycle', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(LaunchPriceSample.exists).mockResolvedValue(null);
     reader.launchState.mockResolvedValue({ value: state, ledger: 100 });
     reader.launchPrice.mockResolvedValue({ value: 10000000n, ledger: 101 });
     store.dueStateTargets.mockResolvedValue([target]);
   });
-  it('samples an active launch and schedules the next state/price check in 10 minutes', async () => {
+  it('seeds an active launch and schedules the next state check in 10 minutes', async () => {
     await refresh();
     expect(reader.launchPrice).toHaveBeenCalledWith('curve');
     expect(recordLaunchPrice).toHaveBeenCalledWith(
@@ -48,6 +51,20 @@ describe('contract price polling lifecycle', () => {
       100,
       new Date(now.getTime() + 600000),
     );
+  });
+  it('does not request or store another price after the initial observation', async () => {
+    vi.mocked(LaunchPriceSample.exists).mockResolvedValue({ _id: 'sample' } as never);
+    await refresh();
+    expect(reader.launchPrice).not.toHaveBeenCalled();
+    expect(recordLaunchPrice).not.toHaveBeenCalled();
+    expect(store.refreshState).toHaveBeenCalledTimes(1);
+  });
+  it('seeds a newly indexed already graduated launch before stopping', async () => {
+    store.dueStateTargets.mockResolvedValue([{ ...target, graduated: true }]);
+    reader.launchState.mockResolvedValue({ value: { ...state, graduated: true }, ledger: 100 });
+    await refresh();
+    expect(recordLaunchPrice).toHaveBeenCalledTimes(1);
+    expect(store.refreshState).toHaveBeenCalledWith(1, expect.anything(), 100, null);
   });
   it('waits until opening before the initial price sample', async () => {
     store.dueStateTargets.mockResolvedValue([{ ...target, startsAt: String(seconds + 60) }]);
