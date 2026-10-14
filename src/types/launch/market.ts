@@ -1,4 +1,5 @@
 interface PriceSampleRecord {
+  observationKey?: string;
   network: 'testnet' | 'public';
   contractId: string;
   bucket: Date;

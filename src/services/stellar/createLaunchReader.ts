@@ -1,10 +1,13 @@
-import { Account, rpc, nativeToScVal } from '@stellar/stellar-sdk';
+import { Account, Address, rpc, nativeToScVal } from '@stellar/stellar-sdk';
 
 import readContract from './readContract';
 import type { LaunchReader } from '../../types/launch/reader';
 import type { Configuration } from '../../types/configuration';
+import type { HolderBalanceReader } from '../../types/launch/holder';
 
-const createLaunchReader = async (configuration: Configuration): Promise<LaunchReader> => {
+const createLaunchReader = async (
+  configuration: Configuration,
+): Promise<LaunchReader & HolderBalanceReader> => {
   const server = new rpc.Server(configuration.rpcUrl, {
     allowHttp: configuration.rpcUrl.startsWith('http:'),
     timeout: 15_000,
@@ -20,6 +23,18 @@ const createLaunchReader = async (configuration: Configuration): Promise<LaunchR
 
   return {
     network: configuration.network,
+    tokenBalance: async (asset, address) => {
+      const read = await readContract(
+        server,
+        getSource(),
+        configuration.networkPassphrase,
+        asset,
+        'balance',
+        [new Address(address).toScVal()],
+      );
+
+      return read.value;
+    },
     launchCount: async () => {
       const source = getSource();
 

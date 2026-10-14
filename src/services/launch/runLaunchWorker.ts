@@ -7,6 +7,7 @@ import refreshLaunchState from './refreshLaunchState';
 import createLaunchIndexes from './createLaunchIndexes';
 import { connectDatabase, disconnectDatabase } from '../../db';
 import createLaunchReader from '../stellar/createLaunchReader';
+import startLaunchHolderWorker from './startLaunchHolderWorker';
 import syncAssetIdentities from '../stellar/syncAssetIdentities';
 import finalizeTokenImages from '../tokenImage/finalizeTokenImages';
 import { loadConfiguration } from '../configuration/loadConfiguration';
@@ -20,6 +21,8 @@ const runLaunchWorker = async (): Promise<void> => {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 
+  let holderWorker: { stop: () => Promise<void> } | null = null;
+
   await connectDatabase(configuration);
 
   try {
@@ -27,6 +30,8 @@ const runLaunchWorker = async (): Promise<void> => {
 
     const reader = await createLaunchReader(configuration);
     const store = createLaunchStore(configuration);
+
+    holderWorker = await startLaunchHolderWorker(reader, configuration);
 
     log.info(
       {
@@ -59,6 +64,7 @@ const runLaunchWorker = async (): Promise<void> => {
           await markTokenImagesForCleanup(configuration);
           nextTokenImageCleanupScanAt = Date.now() + 60 * 60_000;
         }
+
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
           log.warn({ error, contractId }, 'Launch state refresh failed');
         });
@@ -98,7 +104,11 @@ const runLaunchWorker = async (): Promise<void> => {
       }
     }
   } finally {
-    await disconnectDatabase();
+    try {
+      await holderWorker?.stop();
+    } finally {
+      await disconnectDatabase();
+    }
   }
 };
 

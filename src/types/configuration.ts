@@ -8,6 +8,7 @@ interface Configuration {
   dbUri: string;
   dbName: string;
   pollIntervalMs: number;
+  rabbitmqUrl?: string;
 }
 
 export type { Configuration };
