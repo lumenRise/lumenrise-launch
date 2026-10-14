@@ -48,6 +48,7 @@ const loadConfiguration = (): Configuration => {
     dbUri: env.DB_URI,
     dbName: env.DB_NAME,
     pollIntervalMs,
+    rabbitmqUrl: env.RABBITMQ_URL,
   };
 };
 

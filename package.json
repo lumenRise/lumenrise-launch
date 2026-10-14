@@ -17,12 +17,14 @@
   },
   "dependencies": {
     "@stellar/stellar-sdk": "17.1.0",
+    "amqplib": "0.10.9",
     "envyra": "^0.1.6",
     "mongoose": "9.10.1",
     "pino": "^10.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/amqplib": "0.10.8",
     "@types/node": "26.6.2",
     "esbuild": "0.28.2",
     "eslint": "^10.11.0",

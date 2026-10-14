@@ -14,6 +14,9 @@ const schema = defineConfig({
   DB_URI: {
     example: 'mongodb://127.0.0.1:27017?replicaSet=rs0&directConnection=true',
   },
+  RABBITMQ_URL: {
+    default: 'amqp://127.0.0.1:5672',
+  },
   DB_NAME: {
     example: 'lumenrise',
   },

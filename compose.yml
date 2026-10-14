@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 services:
   launch:
     build: .
@@ -9,6 +9,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URI: mongodb://mongo:27017/?replicaSet=rs0
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://rabbitmq:5672}
       DB_NAME: ${DB_NAME:-lumenrise}
       STELLAR_AUTH_NETWORK: ${STELLAR_AUTH_NETWORK:-testnet}
 networks:
