@@ -4,10 +4,12 @@ import type { LaunchData } from '../types/launch/model';
 
 const metadataSchema = new Schema(
   {
-    name: { type: String, required: true },
-    description: { type: String, required: true },
-    logo: { type: String, required: true },
-    symbol: { type: String, required: true },
+    name: { type: String, required: true, immutable: true },
+    description: { type: String, required: true, immutable: true },
+    logo: { type: String, required: true, immutable: true },
+    symbol: { type: String, required: true, immutable: true },
+    website: { type: String },
+    xAccount: { type: String },
   },
   { _id: false, versionKey: false },
 );
@@ -26,7 +28,7 @@ const launchSchema = new Schema<LaunchData>(
     owner: { type: String, required: true, immutable: true },
     asset: { type: String, required: true, immutable: true },
     pair: { type: String, required: true, immutable: true },
-    metadata: { type: metadataSchema, required: true, immutable: true },
+    metadata: { type: metadataSchema, required: true },
     config: { type: Schema.Types.Mixed, required: true, immutable: true },
     state: { type: Schema.Types.Mixed, required: true },
     asOfLedger: { type: Number, required: true, min: 1 },

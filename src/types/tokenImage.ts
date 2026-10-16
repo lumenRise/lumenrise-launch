@@ -6,6 +6,8 @@ interface TokenImageData {
   network: 'testnet' | 'public';
   objectKey: string;
   publicUrl: string;
+  website?: string;
+  xAccount?: string;
   status: 'pending' | 'cleanup_ready' | 'deleting' | 'finalized' | 'expired';
   launchContractId: string | null;
   assetContractId: string | null;

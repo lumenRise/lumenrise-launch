@@ -8,6 +8,8 @@ const schema = new Schema<TokenImageData>(
     ownerAddress: { type: String, required: true },
     network: { type: String, enum: ['testnet', 'public'], required: true },
     objectKey: { type: String, required: true },
+    website: { type: String },
+    xAccount: { type: String },
     publicUrl: { type: String, required: true },
     status: {
       type: String,

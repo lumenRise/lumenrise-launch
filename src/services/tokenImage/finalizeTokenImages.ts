@@ -21,6 +21,23 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
     }
 
     try {
+      const links: Record<string, string> = {};
+
+      if (image.website) {
+        links['metadata.website'] = image.website;
+      }
+
+      if (image.xAccount) {
+        links['metadata.xAccount'] = image.xAccount;
+      }
+
+      if (Object.keys(links).length > 0) {
+        await Launch.updateOne(
+          { network: configuration.network, contractId: launch.contractId },
+          { $set: links },
+        );
+      }
+
       await TokenImage.updateOne(
         { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
         {
