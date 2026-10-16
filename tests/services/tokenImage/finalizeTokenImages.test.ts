@@ -5,7 +5,7 @@ import TokenImage from '../../../src/models/TokenImage';
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 
 vi.mock('../../../src/logger', () => ({ default: { warn: vi.fn() } }));
-vi.mock('../../../src/models/Launch', () => ({ default: { findOne: vi.fn() } }));
+vi.mock('../../../src/models/Launch', () => ({ default: { findOne: vi.fn(), updateOne: vi.fn() } }));
 vi.mock('../../../src/models/TokenImage', () => ({
   default: { find: vi.fn(), updateOne: vi.fn() },
 }));
@@ -32,6 +32,7 @@ describe('token image finalization', () => {
 
     await finalizeTokenImages(configuration);
 
+    expect(Launch.updateOne).not.toHaveBeenCalled();
     expect(Launch.findOne).toHaveBeenCalledWith({
       network: 'testnet',
       owner: image.ownerAddress,
@@ -46,6 +47,36 @@ describe('token image finalization', () => {
           assetContractId: 'CASSET',
         }),
       },
+    );
+  });
+
+  it('copies optional prelaunch links to the confirmed launch before finalizing', async () => {
+    vi.mocked(TokenImage.find).mockReturnValue({
+      lean: vi.fn().mockResolvedValue([{
+        ...image,
+        website: 'https://project.example',
+        xAccount: 'https://x.com/project',
+      }]),
+    } as never);
+
+    vi.mocked(Launch.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ contractId: 'CLAUNCH', asset: 'CASSET' }),
+    } as never);
+
+    await finalizeTokenImages(configuration);
+
+    expect(Launch.updateOne).toHaveBeenCalledWith(
+      { network: 'testnet', contractId: 'CLAUNCH' },
+      {
+        $set: {
+          'metadata.website': 'https://project.example',
+          'metadata.xAccount': 'https://x.com/project',
+        },
+      },
+    );
+
+    expect(vi.mocked(Launch.updateOne).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(TokenImage.updateOne).mock.invocationCallOrder[0]!,
     );
   });
 
