@@ -66,7 +66,10 @@ const runLaunchWorker = async (): Promise<void> => {
         }
 
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
-          log.warn({ error, contractId }, 'Launch state refresh failed');
+          log.warn(
+            { err: error, network: reader.network, contractId, retryDelayMs: 30_000 },
+            'Launch state refresh failed',
+          );
         });
 
         if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {

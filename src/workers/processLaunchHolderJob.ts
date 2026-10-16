@@ -31,9 +31,15 @@ const processLaunchHolderJob = async (
     }
 
     await refreshLaunchHolder(reader, identity, launch.asset, job.address);
+
     await LaunchHolderRefreshJob.updateOne(owner, {
       $set: { status: 'completed', leaseUntil: null, lastError: null },
     });
+
+    log.debug(
+      { ...identity, jobId: job._id, asset: job.asset, address: job.address },
+      'Launch holder refresh completed',
+    );
   } catch (error) {
     const retryDelay = Math.min(300000, 1000 * 2 ** Math.min(job.attempts, 8));
 
@@ -46,7 +52,19 @@ const processLaunchHolderJob = async (
       },
     });
 
-    log.warn({ error, jobId: job._id }, 'Holder refresh deferred');
+    log.warn(
+      {
+        err: error,
+        jobId: job._id,
+        network: job.network,
+        contractId: job.contractId,
+        asset: job.asset,
+        address: job.address,
+        attempts: job.attempts,
+        retryDelayMs: retryDelay,
+      },
+      'Holder refresh deferred',
+    );
   }
 };
 

@@ -1,3 +1,4 @@
+import log from '../../logger';
 import LaunchPriceSample from '../../models/LaunchPriceSample';
 import parseTradeInteger from '../../utils/launch/parseTradeInteger';
 
@@ -25,11 +26,10 @@ const recordLaunchPrice = async (
     return;
   }
 
-  // One immutable observation per ledger, shared by API and worker writers.
   const observationKey = String(read.ledger);
 
   try {
-    await LaunchPriceSample.updateOne(
+    const result = await LaunchPriceSample.updateOne(
       { ...identity, observationKey },
       {
         $setOnInsert: {
@@ -42,6 +42,20 @@ const recordLaunchPrice = async (
       },
       { upsert: true },
     );
+
+    if (result?.upsertedCount === 1) {
+      log.info(
+        {
+          ...identity,
+          ledger: read.ledger,
+          price: price.toString(),
+          previousPrice: previous?.price ?? null,
+          priceScale: 7,
+          sampledAt,
+        },
+        'Launch price observation recorded',
+      );
+    }
   } catch (error) {
     if (
       !error ||

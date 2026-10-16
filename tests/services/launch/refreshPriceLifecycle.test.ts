@@ -6,6 +6,8 @@ import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 import type { LaunchStore, StateTarget } from '../../../src/types/launch/store';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchPriceSample', () => ({ default: { exists: vi.fn() } }));
 vi.mock('../../../src/services/launch/recordLaunchPrice', () => ({ default: vi.fn() }));
 const now = new Date('2026-10-12T00:00:00Z');

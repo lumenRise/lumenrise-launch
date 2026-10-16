@@ -1,3 +1,4 @@
+import log from '../../logger';
 import type { LaunchStore } from '../../types/launch/store';
 import type { LaunchReader } from '../../types/launch/reader';
 import type { Configuration } from '../../types/configuration';
@@ -41,6 +42,20 @@ const syncFactory = async (
 
     await store.save(launch);
     await store.advance(index + 1);
+
+    log.info(
+      {
+        network: launch.network,
+        factoryContractId: launch.factoryContractId,
+        factoryIndex: launch.factoryIndex,
+        contractId: launch.contractId,
+        name: launch.metadata.name,
+        symbol: launch.metadata.symbol,
+        asset: launch.asset,
+        owner: launch.owner,
+      },
+      'New launch indexed',
+    );
 
     index += 1;
     added += 1;

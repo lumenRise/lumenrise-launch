@@ -1,3 +1,4 @@
+import log from '../../logger';
 import recordLaunchPrice from './recordLaunchPrice';
 import type { LaunchStore } from '../../types/launch/store';
 import type { LaunchReader } from '../../types/launch/reader';
@@ -43,11 +44,20 @@ const refreshLaunchState = async (
         );
       }
 
-      await store.refreshState(
-        target.factoryIndex,
-        state,
-        ledger,
-        nextStatePollAt(target, state.graduated === true, now, String(state.sold)),
+      const nextPollAt = nextStatePollAt(target, state.graduated === true, now, String(state.sold));
+
+      await store.refreshState(target.factoryIndex, state, ledger, nextPollAt);
+
+      log.info(
+        {
+          network: reader.network,
+          contractId: target.contractId,
+          ledger,
+          sold: state.sold,
+          graduated: state.graduated,
+          nextStatePollAt: nextPollAt,
+        },
+        nextPollAt === null ? 'Launch polling stopped' : 'Launch state refresh completed',
       );
 
       refreshed += 1;

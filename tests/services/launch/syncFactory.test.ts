@@ -9,6 +9,8 @@ import type { Configuration } from '../../../src/types/configuration';
 import nextStatePollAt from '../../../src/utils/launch/nextStatePollAt';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchPriceSample', () => ({
   default: { exists: vi.fn().mockResolvedValue(null) },
 }));

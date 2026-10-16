@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LaunchPriceSample from '../../../src/models/LaunchPriceSample';
 import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchPriceSample', () => ({
   default: { findOne: vi.fn(), updateOne: vi.fn(), exists: vi.fn() },
 }));
