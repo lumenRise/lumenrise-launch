@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LaunchData } from '../../../src/types/launch/model';
 import syncFactory from '../../../src/services/launch/syncFactory';
@@ -8,6 +8,8 @@ import type { LaunchReader } from '../../../src/types/launch/reader';
 import type { Configuration } from '../../../src/types/configuration';
 import nextStatePollAt from '../../../src/utils/launch/nextStatePollAt';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
+
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
 
 vi.mock('../../../src/models/LaunchPriceSample', () => ({
   default: { exists: vi.fn().mockResolvedValue(null) },
@@ -67,6 +69,114 @@ const state = {
 };
 
 describe('syncFactory', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(1_800_000_000_000));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it.each([
+    { cursor: 9, existing: [1, 2, 3, 4, 6, 7, 8], missing: [5] },
+    { cursor: 9, existing: [2, 3, 4, 5, 6, 7], missing: [1, 8] },
+    { cursor: 1, existing: [1, 2, 3, 4, 6, 7, 8], missing: [5] },
+    { cursor: 1, existing: [1, 2, 3, 4, 5, 6, 7, 8], missing: [] },
+    { cursor: 9, existing: [], missing: [1, 2, 3, 4, 5, 6, 7, 8] },
+  ])(
+    'recovers only missing indexes on startup with cursor $cursor and indexes $existing',
+    async ({ cursor, existing, missing }) => {
+      const saved = new Set(existing);
+      const lookups: number[] = [];
+      let nextIndex = cursor;
+
+      const reader: LaunchReader = {
+        network: 'testnet',
+        launchCount: async () => ({ value: 8, ledger: 100 }),
+        launchAt: async (index: number) => {
+          lookups.push(index);
+
+          return { value: StrKey.encodeContract(Buffer.alloc(32, index + 10)), ledger: 100 };
+        },
+        launchConfig: async () => ({ value: config, ledger: 101 }),
+        launchState: async () => ({ value: state, ledger: 102 }),
+        launchPrice: async () => ({ value: 10_000_000n, ledger: 103 }),
+      };
+
+      const store: LaunchStore = {
+        nextIndex: async () => nextIndex,
+        indexedIndexes: async (count: number) => {
+          expect(count).toBe(8);
+
+          return [...saved];
+        },
+        save: async (launch: LaunchData) => {
+          saved.add(launch.factoryIndex);
+        },
+        advance: async (index: number) => {
+          nextIndex = Math.max(nextIndex, index);
+        },
+        dueStateTargets: async () => [],
+        refreshState: async () => true,
+        deferStateTarget: async () => {},
+      };
+
+      expect(await syncFactory(reader, store, configuration, true)).toBe(missing.length);
+
+      expect(lookups).toEqual(missing);
+      expect([...saved].sort((a: number, b: number): number => a - b)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ]);
+      expect(nextIndex).toBe(9);
+
+      expect(await syncFactory(reader, store, configuration)).toBe(0);
+      expect(lookups).toEqual(missing);
+    },
+  );
+
+  it('retries startup reconciliation after a failed recovery with an advanced cursor', async () => {
+    const saved = new Set([1, 2, 3, 4, 6, 7, 8]);
+    const readIndexes = vi.fn(async (): Promise<number[]> => [...saved]);
+    let failOnce = true;
+
+    const save = vi.fn(async (launch: LaunchData): Promise<void> => {
+      if (failOnce) {
+        failOnce = false;
+
+        throw new Error('temporary database error');
+      }
+
+      saved.add(launch.factoryIndex);
+    });
+
+    const reader: LaunchReader = {
+      network: 'testnet',
+      launchCount: async () => ({ value: 8, ledger: 100 }),
+      launchAt: async () => ({ value: childContractId, ledger: 100 }),
+      launchConfig: async () => ({ value: config, ledger: 101 }),
+      launchState: async () => ({ value: state, ledger: 102 }),
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 103 }),
+    };
+
+    const store: LaunchStore = {
+      nextIndex: async () => 9,
+      indexedIndexes: readIndexes,
+      save,
+      advance: vi.fn(),
+      dueStateTargets: async () => [],
+      refreshState: async () => true,
+      deferStateTarget: async () => {},
+    };
+
+    await expect(syncFactory(reader, store, configuration, true)).rejects.toThrow();
+
+    expect(store.advance).not.toHaveBeenCalled();
+    expect(saved.has(5)).toBe(false);
+
+    expect(await syncFactory(reader, store, configuration, true)).toBe(1);
+    expect(saved.has(5)).toBe(true);
+    expect(readIndexes).toHaveBeenCalledTimes(2);
+  });
+
   it('retries a failed save without advancing the cursor and does not duplicate a launch', async () => {
     let nextIndex = 1;
     let failOnce = true;
@@ -82,6 +192,7 @@ describe('syncFactory', () => {
     };
 
     const store: LaunchStore = {
+      indexedIndexes: async () => [],
       nextIndex: async () => nextIndex,
       save: async (launch) => {
         if (failOnce) {
@@ -94,7 +205,7 @@ describe('syncFactory', () => {
         nextIndex = index;
       },
       dueStateTargets: async () => [],
-      refreshState: async () => {},
+      refreshState: async () => true,
       deferStateTarget: async () => {},
     };
 
@@ -126,6 +237,7 @@ describe('syncFactory', () => {
     };
 
     const store: LaunchStore = {
+      indexedIndexes: async () => [],
       nextIndex: async () => 1,
       save: async () => {
         throw new Error('must not save');
@@ -168,6 +280,7 @@ describe('syncFactory', () => {
     };
 
     const store: LaunchStore = {
+      indexedIndexes: async () => [],
       nextIndex: async () => 2,
       save: async () => {},
       advance: async () => {},
@@ -176,6 +289,7 @@ describe('syncFactory', () => {
         return [
           {
             factoryIndex: 1,
+            claimedUntil: new Date(now.getTime() + 120_000),
             contractId: childContractId,
             startsAt: '1800000000',
             endsAt: '1801209600',
@@ -186,6 +300,8 @@ describe('syncFactory', () => {
       refreshState: async (_index, value, _ledger, next) => {
         savedState = value;
         nextPollAt = next;
+
+        return true;
       },
       deferStateTarget: async () => {
         throw new Error('must not defer');
@@ -195,20 +311,21 @@ describe('syncFactory', () => {
     expect(await refreshLaunchState(reader, store, now)).toBe(1);
 
     expect(savedState).toMatchObject({ sold: '100' });
-    expect(nextPollAt).toEqual(new Date(now.getTime() + 600_000));
+    expect(nextPollAt).toEqual(new Date(now.getTime() + 900_000));
     expect(stateReads).toBe(1);
   });
 
   it('uses slower intervals for closed curves and retries an RPC failure later', async () => {
     const now = new Date(1_800_000_000_000);
     const target = {
+      claimedUntil: new Date(now.getTime() + 120_000),
       factoryIndex: 1,
       contractId: childContractId,
       startsAt: '1790000000',
       endsAt: '1791000000',
       graduated: false,
     };
-    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 600_000));
+    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 900_000));
     expect(nextStatePollAt(target, true, now)).toBeNull();
     expect(nextStatePollAt(target, false, now, '0')).toBeNull();
     expect(
@@ -233,6 +350,7 @@ describe('syncFactory', () => {
       },
     };
     const store: LaunchStore = {
+      indexedIndexes: async () => [],
       nextIndex: async () => 2,
       save: async () => {},
       advance: async () => {},
@@ -251,6 +369,7 @@ describe('syncFactory', () => {
   it('continues with the next launch when retry scheduling also fails', async () => {
     const now = new Date(1_800_000_000_000);
     const targets = [1, 2].map((factoryIndex) => ({
+      claimedUntil: new Date(now.getTime() + 120_000),
       factoryIndex,
       contractId: `${childContractId}-${factoryIndex}`,
       startsAt: '1800000000',
@@ -279,12 +398,15 @@ describe('syncFactory', () => {
       },
     };
     const store: LaunchStore = {
+      indexedIndexes: async () => [],
       nextIndex: async () => 3,
       save: async () => {},
       advance: async () => {},
       dueStateTargets: async () => targets,
       refreshState: async (index) => {
         refreshed.push(index);
+
+        return true;
       },
       deferStateTarget: async () => {
         throw new Error('Database failed');
