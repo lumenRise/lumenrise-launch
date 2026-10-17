@@ -12,7 +12,7 @@ const nextStatePollAt = (
     return null;
   }
 
-  const interval = 10 * 60_000;
+  const interval = 15 * 60_000;
   const untilStart = BigInt(target.startsAt) - seconds;
 
   return new Date(

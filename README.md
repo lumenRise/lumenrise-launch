@@ -1,5 +1,19 @@
 # lumenrise-launch
 
+### Price refresh
+
+After a launch opens, the worker reads its state and `current_price` whenever
+`nextStatePollAt` is due, then schedules the next check for 15 minutes later.
+A verified trade submitted to the API reads the price immediately and resets
+that same deadline to 15 minutes after its observation. The deadline is stored
+in MongoDB, so polling resumes after restarts and detects price changes from
+trades made outside the client. Unchanged prices do not add duplicate chart
+samples; this polling does not import external trades into trade history.
+
+Failed reads retry after 30 seconds. Polling stops after graduation or after
+the launch ends with no tokens left to sell back. The launch worker must be
+running against the same database and network as the API.
+
 ### Holder refresh queue
 
 Use the same `RABBITMQ_URL` and MongoDB database as the API and reputation

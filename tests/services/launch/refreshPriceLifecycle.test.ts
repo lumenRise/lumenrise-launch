@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LaunchReader } from '../../../src/types/launch/reader';
-import LaunchPriceSample from '../../../src/models/LaunchPriceSample';
 import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 import type { LaunchStore, StateTarget } from '../../../src/types/launch/store';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
 vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
 
-vi.mock('../../../src/models/LaunchPriceSample', () => ({ default: { exists: vi.fn() } }));
 vi.mock('../../../src/services/launch/recordLaunchPrice', () => ({ default: vi.fn() }));
 const now = new Date('2026-10-12T00:00:00Z');
 const seconds = Math.floor(now.getTime() / 1000);
@@ -35,12 +33,11 @@ const refresh = () =>
 describe('contract price polling lifecycle', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(LaunchPriceSample.exists).mockResolvedValue(null);
     reader.launchState.mockResolvedValue({ value: state, ledger: 100 });
     reader.launchPrice.mockResolvedValue({ value: 10000000n, ledger: 101 });
     store.dueStateTargets.mockResolvedValue([target]);
   });
-  it('seeds an active launch and schedules the next state check in 10 minutes', async () => {
+  it('seeds an active launch and schedules the next state check in 15 minutes', async () => {
     await refresh();
     expect(reader.launchPrice).toHaveBeenCalledWith('curve');
     expect(recordLaunchPrice).toHaveBeenCalledWith(
@@ -51,15 +48,33 @@ describe('contract price polling lifecycle', () => {
       1,
       expect.anything(),
       100,
-      new Date(now.getTime() + 600000),
+      new Date(now.getTime() + 900000),
     );
   });
-  it('does not request or store another price after the initial observation', async () => {
-    vi.mocked(LaunchPriceSample.exists).mockResolvedValue({ _id: 'sample' } as never);
+  it('reads and records a fresh price on every due poll', async () => {
     await refresh();
-    expect(reader.launchPrice).not.toHaveBeenCalled();
-    expect(recordLaunchPrice).not.toHaveBeenCalled();
-    expect(store.refreshState).toHaveBeenCalledTimes(1);
+
+    reader.launchPrice.mockResolvedValue({ value: 12000000n, ledger: 201 });
+
+    await refreshLaunchState(
+      reader as unknown as LaunchReader,
+      store as unknown as LaunchStore,
+      new Date(now.getTime() + 900000),
+    );
+
+    expect(reader.launchPrice).toHaveBeenCalledTimes(2);
+
+    expect(recordLaunchPrice).toHaveBeenLastCalledWith(
+      { network: 'testnet', contractId: 'curve' },
+      { value: 12000000n, ledger: 201 },
+    );
+
+    expect(store.refreshState).toHaveBeenLastCalledWith(
+      1,
+      expect.anything(),
+      100,
+      new Date(now.getTime() + 1800000),
+    );
   });
   it('seeds a newly indexed already graduated launch before stopping', async () => {
     store.dueStateTargets.mockResolvedValue([{ ...target, graduated: true }]);
@@ -87,7 +102,7 @@ describe('contract price polling lifecycle', () => {
       1,
       expect.anything(),
       100,
-      new Date(now.getTime() + 600000),
+      new Date(now.getTime() + 900000),
     );
   });
   it('uses fresh state when a cached empty launch has since received trades', async () => {
@@ -100,7 +115,7 @@ describe('contract price polling lifecycle', () => {
       1,
       expect.anything(),
       100,
-      new Date(now.getTime() + 600000),
+      new Date(now.getTime() + 900000),
     );
   });
   it.each([

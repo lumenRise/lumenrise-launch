@@ -197,7 +197,7 @@ describe('syncFactory', () => {
     expect(await refreshLaunchState(reader, store, now)).toBe(1);
 
     expect(savedState).toMatchObject({ sold: '100' });
-    expect(nextPollAt).toEqual(new Date(now.getTime() + 600_000));
+    expect(nextPollAt).toEqual(new Date(now.getTime() + 900_000));
     expect(stateReads).toBe(1);
   });
 
@@ -210,7 +210,7 @@ describe('syncFactory', () => {
       endsAt: '1791000000',
       graduated: false,
     };
-    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 600_000));
+    expect(nextStatePollAt(target, false, now)).toEqual(new Date(now.getTime() + 900_000));
     expect(nextStatePollAt(target, true, now)).toBeNull();
     expect(nextStatePollAt(target, false, now, '0')).toBeNull();
     expect(
