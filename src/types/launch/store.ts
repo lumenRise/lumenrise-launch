@@ -9,18 +9,24 @@ interface StateTarget {
   sold?: string;
 }
 
+interface ClaimedStateTarget extends StateTarget {
+  claimedUntil: Date;
+}
+
 interface LaunchStore {
   nextIndex(): Promise<number>;
+  indexedIndexes(count: number): Promise<number[]>;
   save(launch: LaunchData): Promise<void>;
   advance(nextIndex: number): Promise<void>;
-  dueStateTargets(now: Date, limit: number): Promise<StateTarget[]>;
+  dueStateTargets(now: Date, limit: number): Promise<ClaimedStateTarget[]>;
   refreshState(
     index: number,
     state: Record<string, unknown>,
     ledger: number,
     nextPollAt: Date | null,
-  ): Promise<void>;
-  deferStateTarget(index: number, nextPollAt: Date): Promise<void>;
+    claimedUntil: Date,
+  ): Promise<boolean>;
+  deferStateTarget(index: number, nextPollAt: Date, claimedUntil: Date): Promise<void>;
 }
 
-export type { StateTarget, LaunchStore };
+export type { StateTarget, LaunchStore, ClaimedStateTarget };

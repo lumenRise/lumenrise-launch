@@ -8,7 +8,7 @@ import parseLaunchState from '../../utils/launch/parseLaunchState';
 const refreshLaunchState = async (
   reader: LaunchReader,
   store: LaunchStore,
-  now = new Date(),
+  now: Date = new Date(),
   onError?: (error: unknown, contractId: string) => void,
 ): Promise<number> => {
   const targets = await store.dueStateTargets(now, 2);
@@ -19,7 +19,7 @@ const refreshLaunchState = async (
       const { value, ledger } = await reader.launchState(target.contractId);
       const state = parseLaunchState(value);
 
-      const seconds = BigInt(Math.floor(now.getTime() / 1000));
+      const seconds = BigInt(Math.floor(Date.now() / 1000));
 
       if (seconds >= BigInt(target.startsAt)) {
         const priceRead = await reader.launchPrice(target.contractId);
@@ -34,9 +34,24 @@ const refreshLaunchState = async (
         );
       }
 
-      const nextPollAt = nextStatePollAt(target, state.graduated === true, now, String(state.sold));
+      const nextPollAt = nextStatePollAt(
+        target,
+        state.graduated === true,
+        new Date(),
+        String(state.sold),
+      );
 
-      await store.refreshState(target.factoryIndex, state, ledger, nextPollAt);
+      const saved = await store.refreshState(
+        target.factoryIndex,
+        state,
+        ledger,
+        nextPollAt,
+        target.claimedUntil,
+      );
+
+      if (!saved) {
+        continue;
+      }
 
       log.info(
         {
@@ -54,7 +69,11 @@ const refreshLaunchState = async (
     } catch (error) {
       onError?.(error, target.contractId);
       try {
-        await store.deferStateTarget(target.factoryIndex, new Date(now.getTime() + 30_000));
+        await store.deferStateTarget(
+          target.factoryIndex,
+          new Date(Date.now() + 30_000),
+          target.claimedUntil,
+        );
       } catch (deferError) {
         onError?.(deferError, target.contractId);
       }

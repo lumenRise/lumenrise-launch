@@ -15,9 +15,9 @@ const nextStatePollAt = (
   const interval = 15 * 60_000;
   const untilStart = BigInt(target.startsAt) - seconds;
 
-  return new Date(
-    now.getTime() + (untilStart > 0n ? Math.min(Number(untilStart * 1000n), interval) : interval),
-  );
+  return untilStart > 0n
+    ? new Date(Number(BigInt(target.startsAt) * 1000n))
+    : new Date(now.getTime() + interval);
 };
 
 export default nextStatePollAt;

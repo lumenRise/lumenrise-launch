@@ -2,6 +2,7 @@ import Launch from '../../models/Launch';
 import FactoryCursor from '../../models/FactoryCursor';
 import type { LaunchStore } from '../../types/launch/store';
 import type { Configuration } from '../../types/configuration';
+import type { ClaimedStateTarget } from '../../types/launch/store';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
   const identity = {
@@ -15,6 +16,12 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
 
       return cursor?.nextIndex ?? 1;
     },
+
+    indexedIndexes: async (count: number): Promise<number[]> =>
+      Launch.distinct('factoryIndex', {
+        ...identity,
+        factoryIndex: { $gte: 1, $lte: count },
+      }),
 
     save: async (launch) => {
       await Launch.updateOne(
@@ -37,38 +44,56 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
     },
 
     dueStateTargets: async (now, limit) => {
-      const launches = await Launch.find({
-        ...identity,
-        $or: [{ nextStatePollAt: { $lte: now } }, { nextStatePollAt: { $exists: false } }],
-      })
-        .sort({ nextStatePollAt: 1, factoryIndex: 1 })
-        .limit(limit)
-        .select(
-          'factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated state.sold',
-        )
-        .lean();
+      const targets: ClaimedStateTarget[] = [];
 
-      return launches.map((launch) => {
+      for (let position = 0; position < limit; position += 1) {
+        const claimedUntil = new Date(Date.now() + 120_000);
+
+        const launch = await Launch.findOneAndUpdate(
+          {
+            ...identity,
+            $or: [{ nextStatePollAt: { $lte: now } }, { nextStatePollAt: { $exists: false } }],
+          },
+          { $set: { nextStatePollAt: claimedUntil } },
+          { sort: { nextStatePollAt: 1, factoryIndex: 1 }, returnDocument: 'after' },
+        )
+          .select(
+            'factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated state.sold',
+          )
+          .lean();
+
+        if (!launch) {
+          break;
+        }
+
         const params = (launch.config as { params?: Record<string, unknown> }).params;
 
         if (typeof params?.starts_at !== 'string' || typeof params.ends_at !== 'string') {
           throw new Error(`Launch ${launch.factoryIndex} has invalid schedule`);
         }
 
-        return {
+        targets.push({
           factoryIndex: launch.factoryIndex,
           contractId: launch.contractId,
           startsAt: params.starts_at,
           endsAt: params.ends_at,
           graduated: launch.state.graduated === true,
           sold: String(launch.state.sold),
-        };
-      });
+          claimedUntil,
+        });
+      }
+
+      return targets;
     },
 
-    refreshState: async (index, state, ledger, nextPollAt) => {
+    refreshState: async (index, state, ledger, nextPollAt, claimedUntil) => {
       const result = await Launch.updateOne(
-        { ...identity, factoryIndex: index, stateAsOfLedger: { $lte: ledger } },
+        {
+          ...identity,
+          factoryIndex: index,
+          stateAsOfLedger: { $lte: ledger },
+          nextStatePollAt: claimedUntil,
+        },
         {
           $set: {
             state,
@@ -79,27 +104,29 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
         },
       );
 
-      if (result.matchedCount !== 1) {
-        const newer = await Launch.exists({
-          ...identity,
-          factoryIndex: index,
-          stateAsOfLedger: { $gt: ledger },
-        });
-
-        if (!newer) {
-          throw new Error(`Launch ${index} is not indexed`);
-        }
-
-        // A newer API observation owns both the state and its poll schedule.
+      if (result.matchedCount === 1) {
+        return true;
       }
+
+      const newer = await Launch.exists({
+        ...identity,
+        factoryIndex: index,
+        $or: [{ stateAsOfLedger: { $gt: ledger } }, { nextStatePollAt: { $ne: claimedUntil } }],
+      });
+
+      if (!newer) {
+        throw new Error(`Launch ${index} is not indexed`);
+      }
+
+      return false;
     },
 
-    deferStateTarget: async (index, nextPollAt) => {
+    deferStateTarget: async (index, nextPollAt, claimedUntil) => {
       await Launch.updateOne(
         {
           ...identity,
           factoryIndex: index,
-          $or: [{ nextStatePollAt: { $type: 'date' } }, { nextStatePollAt: { $exists: false } }],
+          nextStatePollAt: claimedUntil,
         },
         { $set: { nextStatePollAt: nextPollAt } },
       );

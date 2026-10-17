@@ -8,6 +8,7 @@ const syncFactory = async (
   reader: LaunchReader,
   store: LaunchStore,
   configuration: Configuration,
+  reconcile: boolean = false,
 ): Promise<number> => {
   const { value: count } = await reader.launchCount();
 
@@ -17,9 +18,20 @@ const syncFactory = async (
     throw new Error('Factory cursor is inconsistent with the on-chain launch count');
   }
 
+  const indexedIndexes = reconcile ? new Set(await store.indexedIndexes(count)) : null;
   let added = 0;
 
+  if (reconcile) {
+    index = 1;
+  }
+
   while (index <= count) {
+    if (indexedIndexes?.has(index)) {
+      index += 1;
+
+      continue;
+    }
+
     const { value: contractId } = await reader.launchAt(index);
 
     if (!contractId) {
@@ -59,6 +71,21 @@ const syncFactory = async (
 
     index += 1;
     added += 1;
+  }
+
+  if (reconcile) {
+    await store.advance(count + 1);
+
+    log.info(
+      {
+        network: configuration.network,
+        factoryContractId: configuration.factoryContractId,
+        launchCount: count,
+        indexedCount: indexedIndexes?.size ?? 0,
+        recoveredCount: added,
+      },
+      'Launch factory reconciliation completed',
+    );
   }
 
   return added;

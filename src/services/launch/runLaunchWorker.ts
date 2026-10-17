@@ -4,12 +4,14 @@ import log from '../../logger';
 import syncFactory from './syncFactory';
 import createLaunchStore from './createLaunchStore';
 import refreshLaunchState from './refreshLaunchState';
+import createScheduledTask from './createScheduledTask';
 import createLaunchIndexes from './createLaunchIndexes';
 import { connectDatabase, disconnectDatabase } from '../../db';
 import createLaunchReader from '../stellar/createLaunchReader';
 import startLaunchHolderWorker from './startLaunchHolderWorker';
 import syncAssetIdentities from '../stellar/syncAssetIdentities';
 import finalizeTokenImages from '../tokenImage/finalizeTokenImages';
+import type { ScheduledTask } from '../../types/launch/scheduledTask';
 import { loadConfiguration } from '../configuration/loadConfiguration';
 import markTokenImagesForCleanup from '../tokenImage/markTokenImagesForCleanup';
 
@@ -20,6 +22,8 @@ const runLaunchWorker = async (): Promise<void> => {
 
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
+
+  const tasks: ScheduledTask[] = [];
 
   let holderWorker: { stop: () => Promise<void> } | null = null;
 
@@ -41,59 +45,70 @@ const runLaunchWorker = async (): Promise<void> => {
       'Launch worker started',
     );
 
-    let nextAssetIdentitySyncAt = 0;
-    let nextTokenImageSyncAt = 0;
-    let nextFactorySyncAt = 0;
-    let nextTokenImageCleanupScanAt = 0;
+    let reconcileFactory = true;
+
+    const imageTask = createScheduledTask({
+      name: 'token image finalization',
+      intervalMs: 60_000,
+      retryMs: 60_000,
+      run: () => finalizeTokenImages(configuration),
+    });
+
+    const cleanupTask = createScheduledTask({
+      name: 'token image cleanup scan',
+      intervalMs: 60 * 60_000,
+      retryMs: 60_000,
+      run: () => markTokenImagesForCleanup(configuration),
+    });
+
+    const assetTask = createScheduledTask({
+      name: 'asset identity sync',
+      intervalMs: 60 * 60_000,
+      retryMs: 15 * 60_000,
+      run: () => syncAssetIdentities(configuration),
+    });
+
+    const factoryTask = createScheduledTask({
+      name: 'factory sync',
+      intervalMs: 30_000,
+      retryMs: 30_000,
+      run: async (): Promise<void> => {
+        const added = await syncFactory(reader, store, configuration, reconcileFactory);
+
+        reconcileFactory = false;
+
+        if (added > 0) {
+          imageTask.request();
+          assetTask.request();
+
+          log.info(
+            { count: added, factoryContractId: configuration.factoryContractId },
+            'Launches indexed',
+          );
+        }
+      },
+    });
+
+    tasks.push(factoryTask, imageTask, cleanupTask, assetTask);
 
     while (!controller.signal.aborted) {
+      factoryTask.tick();
+
+      if (!reconcileFactory) {
+        imageTask.tick();
+        cleanupTask.tick();
+        assetTask.tick();
+      }
+
       try {
-        let added = 0;
-
-        if (Date.now() >= nextFactorySyncAt) {
-          added = await syncFactory(reader, store, configuration);
-          nextFactorySyncAt = Date.now() + 30_000;
-        }
-
-        if (added > 0 || Date.now() >= nextTokenImageSyncAt) {
-          await finalizeTokenImages(configuration);
-          nextTokenImageSyncAt = Date.now() + 60_000;
-        }
-
-        if (Date.now() >= nextTokenImageCleanupScanAt && Date.now() < nextFactorySyncAt) {
-          await markTokenImagesForCleanup(configuration);
-          nextTokenImageCleanupScanAt = Date.now() + 60 * 60_000;
-        }
-
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
           log.warn(
             { err: error, network: reader.network, contractId, retryDelayMs: 30_000 },
             'Launch state refresh failed',
           );
         });
-
-        if (added > 0 || Date.now() >= nextAssetIdentitySyncAt) {
-          nextAssetIdentitySyncAt = Date.now() + 15 * 60 * 1000;
-
-          try {
-            await syncAssetIdentities(configuration);
-            nextAssetIdentitySyncAt = Date.now() + 60 * 60 * 1000;
-          } catch (error) {
-            log.warn({ error }, 'Asset identity sync is temporarily unavailable');
-          }
-        }
-
-        if (added > 0) {
-          log.info(
-            {
-              count: added,
-              factoryContractId: configuration.factoryContractId,
-            },
-            'Launches indexed',
-          );
-        }
       } catch (error) {
-        log.error({ error }, 'Launch sync failed');
+        log.error({ err: error }, 'Launch state polling failed');
       }
 
       try {
@@ -108,8 +123,12 @@ const runLaunchWorker = async (): Promise<void> => {
     }
   } finally {
     try {
+      await Promise.all(tasks.map((task: ScheduledTask): Promise<void> => task.stop()));
       await holderWorker?.stop();
     } finally {
+      process.removeListener('SIGINT', stop);
+      process.removeListener('SIGTERM', stop);
+
       await disconnectDatabase();
     }
   }
