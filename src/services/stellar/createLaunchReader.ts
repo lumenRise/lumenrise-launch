@@ -1,6 +1,7 @@
-import { Account, Address, rpc, nativeToScVal } from '@stellar/stellar-sdk';
+import { Account, Address, Horizon, rpc, nativeToScVal } from '@stellar/stellar-sdk';
 
 import readContract from './readContract';
+import readLaunchCreation from './readLaunchCreation';
 import type { LaunchReader } from '../../types/launch/reader';
 import type { Configuration } from '../../types/configuration';
 import type { HolderBalanceReader } from '../../types/launch/holder';
@@ -13,6 +14,7 @@ const createLaunchReader = async (
     timeout: 15_000,
   });
 
+  const horizon = new Horizon.Server(configuration.horizonUrl);
   const network = await server.getNetwork();
 
   if (network.passphrase !== configuration.networkPassphrase) {
@@ -23,6 +25,7 @@ const createLaunchReader = async (
 
   return {
     network: configuration.network,
+    launchCreation: async (contractId: string) => readLaunchCreation(server, contractId, horizon),
     tokenBalance: async (asset, address) => {
       const read = await readContract(
         server,
