@@ -52,6 +52,18 @@ const syncFactory = async (
       stateAsOfLedger: state.ledger,
     });
 
+    if (reader.launchCreation) {
+      try {
+        const creation = await reader.launchCreation(contractId);
+
+        if (creation) {
+          Object.assign(launch, creation);
+        }
+      } catch (error) {
+        log.warn({ error, contractId }, 'Launch creation lookup unavailable; keeping date unknown');
+      }
+    }
+
     await store.save(launch);
     await store.advance(index + 1);
 
