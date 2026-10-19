@@ -26,7 +26,6 @@ const configuration: Configuration = {
   network: 'testnet',
   networkPassphrase: 'Test SDF Network ; September 2015',
   factoryContractId,
-  observerAddress: owner,
   rpcUrl: 'https://example.test',
   dbUri: 'mongodb://localhost:27017',
   dbName: 'test',

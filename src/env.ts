@@ -20,27 +20,27 @@ const schema = defineConfig({
   DB_NAME: {
     example: 'lumenrise',
   },
-  STELLAR_AUTH_NETWORK: {
-    type: 'enum',
-    values: ['testnet', 'public'],
-    default: 'testnet',
-  },
-  STELLAR_RPC_URL: {
-    type: 'url',
-    example: 'https://soroban-testnet.stellar.org',
-  },
-  STELLAR_HORIZON_URL: {
-    example: 'https://horizon-testnet.stellar.org',
-  },
-  STELLAR_READ_ACCOUNT: {
-    example: 'GDAUDEZPAI4QV2L6A6OOJ27KDQMFPRQJH26AUUTSQOYBNFZWPVYXBHQH',
-  },
-  LAUNCH_FACTORY_CONTRACT_ID: {
-    example: 'CDDM43ZQB34YLYAPAN2EALMRNF32PUYUUOFILKWZJLXHKEQA6JEBN5PC',
-  },
   LAUNCH_POLL_INTERVAL_MS: {
     type: 'number',
     default: 5_000,
+  },
+  STELLAR_TESTNET_RPC_URL: {
+    default: 'https://soroban-testnet.stellar.org',
+  },
+  STELLAR_TESTNET_HORIZON_URL: {
+    default: 'https://horizon-testnet.stellar.org',
+  },
+  LAUNCH_TESTNET_FACTORY_CONTRACT_ID: {
+    default: '',
+  },
+  STELLAR_PUBLIC_RPC_URL: {
+    default: '',
+  },
+  STELLAR_PUBLIC_HORIZON_URL: {
+    default: 'https://horizon.stellar.org',
+  },
+  LAUNCH_PUBLIC_FACTORY_CONTRACT_ID: {
+    default: '',
   },
 });
 

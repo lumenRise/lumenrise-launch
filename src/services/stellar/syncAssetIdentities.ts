@@ -1,4 +1,4 @@
-import { rpc } from '@stellar/stellar-sdk';
+import { rpc, Account, contract } from '@stellar/stellar-sdk';
 
 import Launch from '../../models/Launch';
 import AssetIdentity from '../../models/AssetIdentity';
@@ -45,12 +45,12 @@ const syncAssetIdentities = async (configuration: Configuration): Promise<number
   const network = await server.getNetwork();
 
   if (network.passphrase !== configuration.networkPassphrase) {
-    throw new Error('Stellar RPC network does not match STELLAR_AUTH_NETWORK');
+    throw new Error('Stellar RPC network does not match the configured network');
   }
 
   await checkHorizonNetwork(configuration.horizonUrl, configuration.networkPassphrase);
 
-  const source = await server.getAccount(configuration.observerAddress);
+  const source = new Account(contract.NULL_ACCOUNT, '0');
 
   for (const asset of pending) {
     const identity = await resolveAssetIdentity(asset, server, source, configuration);
