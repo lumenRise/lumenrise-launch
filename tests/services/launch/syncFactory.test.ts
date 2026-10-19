@@ -9,7 +9,7 @@ import type { Configuration } from '../../../src/types/configuration';
 import nextStatePollAt from '../../../src/utils/launch/nextStatePollAt';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 
-vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn(), warn: vi.fn() } }));
 
 vi.mock('../../../src/models/LaunchPriceSample', () => ({
   default: { exists: vi.fn().mockResolvedValue(null) },
@@ -75,6 +75,48 @@ describe('syncFactory', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('backfills verified creation time independently of the future trading start', async () => {
+    const createdAt = new Date('2026-09-01T00:00:00Z');
+    const save = vi.fn();
+
+    const reader: LaunchReader = {
+      network: 'testnet',
+      launchCount: async () => ({ value: 1, ledger: 100 }),
+      launchAt: async () => ({ value: childContractId, ledger: 100 }),
+      launchConfig: async () => ({ value: config, ledger: 101 }),
+      launchState: async () => ({ value: state, ledger: 102 }),
+      launchPrice: async () => ({ value: 10_000_000n, ledger: 103 }),
+      launchCreation: async () => ({
+        createdAt,
+        creationLedger: 90,
+        creationTransactionHash: 'a'.repeat(64),
+      }),
+    };
+
+    const store: LaunchStore = {
+      nextIndex: async () => 2,
+      indexedIndexes: async () => [],
+      save,
+      advance: vi.fn(),
+      dueStateTargets: async () => [],
+      refreshState: async () => true,
+      deferStateTarget: async () => {},
+    };
+
+    await syncFactory(reader, store, configuration, true);
+
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdAt,
+        creationLedger: 90,
+        creationTransactionHash: 'a'.repeat(64),
+        config: expect.objectContaining({
+          params: expect.objectContaining({ starts_at: '1800000000' }),
+        }),
+      }),
+    );
+  });
 
   it.each([
     { cursor: 9, existing: [1, 2, 3, 4, 6, 7, 8], missing: [5] },
