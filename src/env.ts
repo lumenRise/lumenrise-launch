@@ -33,15 +33,6 @@ const schema = defineConfig({
   LAUNCH_TESTNET_FACTORY_CONTRACT_ID: {
     default: '',
   },
-  STELLAR_TESTNET_HOME_DOMAIN: {
-    default: '',
-  },
-  STELLAR_TESTNET_TOML_DIRNAME: {
-    default: './storage/testnet',
-  },
-  STELLAR_TESTNET_TOML_FILENAME: {
-    default: 'stellar.toml',
-  },
   STELLAR_PUBLIC_RPC_URL: {
     default: '',
   },
@@ -50,15 +41,6 @@ const schema = defineConfig({
   },
   LAUNCH_PUBLIC_FACTORY_CONTRACT_ID: {
     default: '',
-  },
-  STELLAR_PUBLIC_HOME_DOMAIN: {
-    default: '',
-  },
-  STELLAR_PUBLIC_TOML_DIRNAME: {
-    default: './storage/public',
-  },
-  STELLAR_PUBLIC_TOML_FILENAME: {
-    default: 'stellar.toml',
   },
 });
 

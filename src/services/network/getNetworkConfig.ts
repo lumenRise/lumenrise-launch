@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { Networks } from '@stellar/stellar-sdk';
 
 import env from '../../env';
@@ -15,11 +14,6 @@ const getNetworkConfig = (
       horizonUrl: configuration.STELLAR_TESTNET_HORIZON_URL,
       networkPassphrase: Networks.TESTNET,
       factoryContractId: configuration.LAUNCH_TESTNET_FACTORY_CONTRACT_ID,
-      homeDomain: configuration.STELLAR_TESTNET_HOME_DOMAIN,
-      tomlPath: resolve(
-        configuration.STELLAR_TESTNET_TOML_DIRNAME,
-        configuration.STELLAR_TESTNET_TOML_FILENAME,
-      ),
     };
   }
 
@@ -29,11 +23,6 @@ const getNetworkConfig = (
     horizonUrl: configuration.STELLAR_PUBLIC_HORIZON_URL,
     networkPassphrase: Networks.PUBLIC,
     factoryContractId: configuration.LAUNCH_PUBLIC_FACTORY_CONTRACT_ID,
-    homeDomain: configuration.STELLAR_PUBLIC_HOME_DOMAIN,
-    tomlPath: resolve(
-      configuration.STELLAR_PUBLIC_TOML_DIRNAME,
-      configuration.STELLAR_PUBLIC_TOML_FILENAME,
-    ),
   };
 };
 
