@@ -1,4 +1,4 @@
-import { Account, Address, Horizon, rpc, nativeToScVal } from '@stellar/stellar-sdk';
+import { Account, Address, Horizon, rpc, contract, nativeToScVal } from '@stellar/stellar-sdk';
 
 import readContract from './readContract';
 import readLaunchCreation from './readLaunchCreation';
@@ -18,10 +18,10 @@ const createLaunchReader = async (
   const network = await server.getNetwork();
 
   if (network.passphrase !== configuration.networkPassphrase) {
-    throw new Error('Stellar RPC network does not match STELLAR_AUTH_NETWORK');
+    throw new Error('Stellar RPC network does not match the configured network');
   }
 
-  const getSource = () => new Account(configuration.observerAddress, '0');
+  const getSource = () => new Account(contract.NULL_ACCOUNT, '0');
 
   return {
     network: configuration.network,

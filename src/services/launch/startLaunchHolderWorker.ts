@@ -14,7 +14,7 @@ const startLaunchHolderWorker = async (
 ) => {
   const worker = await startPolledQueueWorker({
     broker: null,
-    queue: LAUNCH_HOLDER_QUEUE,
+    queue: `${LAUNCH_HOLDER_QUEUE}.${configuration.network}`,
     pollIntervalMs: configuration.pollIntervalMs,
     processJob: (jobId) => processLaunchHolderJob(reader, jobId),
     parseJobId,
