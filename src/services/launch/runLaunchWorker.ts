@@ -33,6 +33,8 @@ const runLaunchWorker = async (): Promise<void> => {
         try {
           await runNetworkWorker(configuration, controller.signal);
         } catch (error) {
+          log.error({ err: error, network: configuration.network }, 'Launch network worker failed');
+
           controller.abort();
 
           throw error;

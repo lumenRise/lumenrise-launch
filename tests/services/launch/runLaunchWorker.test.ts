@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import log from '../../../src/logger';
 import syncFactory from '../../../src/services/launch/syncFactory';
 import { connectDatabase, disconnectDatabase } from '../../../src/db';
 import runLaunchWorker from '../../../src/services/launch/runLaunchWorker';
@@ -118,6 +119,22 @@ describe('launch worker timer coordination', () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     await running;
+
+    expect(disconnectDatabase).toHaveBeenCalledOnce();
+  });
+
+  it('logs the failed network and error and disconnects after startup failure', async (): Promise<void> => {
+    const error = new Error('RPC unavailable');
+
+    vi.mocked(loadConfiguration).mockReturnValue({ network: 'testnet', pollIntervalMs: 5000 } as never);
+    vi.mocked(createLaunchReader).mockRejectedValueOnce(error);
+
+    await expect(runLaunchWorker()).rejects.toBe(error);
+
+    expect(log.error).toHaveBeenCalledWith(
+      { err: error, network: 'testnet' },
+      'Launch network worker failed',
+    );
 
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });
