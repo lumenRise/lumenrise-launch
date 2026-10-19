@@ -14,7 +14,6 @@ const configuration: Configuration = {
   network: 'testnet',
   networkPassphrase: 'testnet',
   factoryContractId: 'factory',
-  observerAddress: 'observer',
   rpcUrl: 'https://rpc.test',
   dbUri: 'mongodb://localhost:27017',
   dbName: 'test',

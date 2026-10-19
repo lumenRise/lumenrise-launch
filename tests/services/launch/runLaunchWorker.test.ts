@@ -15,6 +15,10 @@ vi.mock('node:timers/promises', () => ({
     }),
 }));
 
+vi.mock('../../../src/services/network/getNetworkConfig', () => ({
+  default: (network: string) => ({ factoryContractId: network === 'testnet' ? 'factory' : '' }),
+}));
+
 vi.mock('../../../src/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

@@ -27,6 +27,7 @@ describe('launch connection to the shared broker', () => {
     vi.mocked(amqp.connect).mockRejectedValueOnce(new Error('broker down'));
     const worker = await startLaunchHolderWorker(reader, {
       rabbitmqUrl: 'amqp://shared-broker',
+      network: 'testnet',
       pollIntervalMs: 1000,
     } as never);
     await vi.advanceTimersByTimeAsync(5000);
@@ -34,7 +35,7 @@ describe('launch connection to the shared broker', () => {
     expect(amqp.connect).toHaveBeenCalledWith('amqp://shared-broker', { timeout: 5000 });
     expect(startPolledQueueWorker).toHaveBeenCalledOnce();
     expect(startPolledQueueWorker).toHaveBeenCalledWith(
-      expect.objectContaining({ queue: 'lumenrise.launch.holder-refresh.v1', broker: null }),
+      expect.objectContaining({ queue: 'lumenrise.launch.holder-refresh.v2.testnet', broker: null }),
     );
     expect(baseWorker.attachBroker).toHaveBeenCalledWith(broker);
     await worker.stop();
