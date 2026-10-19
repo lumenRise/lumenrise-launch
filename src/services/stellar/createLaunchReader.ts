@@ -15,11 +15,7 @@ const createLaunchReader = async (
   });
 
   const horizon = new Horizon.Server(configuration.horizonUrl);
-  const network = await server.getNetwork();
-
-  if (network.passphrase !== configuration.networkPassphrase) {
-    throw new Error('Stellar RPC network does not match the configured network');
-  }
+  await server.getNetwork();
 
   const getSource = () => new Account(contract.NULL_ACCOUNT, '0');
 

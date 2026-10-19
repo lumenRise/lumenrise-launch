@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import log from '../../../src/logger';
 import syncFactory from '../../../src/services/launch/syncFactory';
 import { connectDatabase, disconnectDatabase } from '../../../src/db';
 import runLaunchWorker from '../../../src/services/launch/runLaunchWorker';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
+import createLaunchReader from '../../../src/services/stellar/createLaunchReader';
 import syncAssetIdentities from '../../../src/services/stellar/syncAssetIdentities';
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 import { loadConfiguration } from '../../../src/services/configuration/loadConfiguration';
@@ -16,7 +18,7 @@ vi.mock('node:timers/promises', () => ({
 }));
 
 vi.mock('../../../src/services/network/getNetworkConfig', () => ({
-  default: (network: string) => ({ factoryContractId: network === 'testnet' ? 'factory' : '' }),
+  default: (network: string) => ({ factoryContractId: `${network}-factory` }),
 }));
 
 vi.mock('../../../src/logger', () => ({
@@ -46,7 +48,7 @@ describe('launch worker timer coordination', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-17T00:00:00Z'));
 
-    vi.mocked(loadConfiguration).mockReturnValue({ pollIntervalMs: 5000 } as never);
+    vi.mocked(loadConfiguration).mockReturnValue({ network: 'testnet', pollIntervalMs: 5000 } as never);
     vi.mocked(syncFactory).mockResolvedValue(0);
     vi.mocked(refreshLaunchState).mockResolvedValue(0);
     vi.mocked(finalizeTokenImages).mockResolvedValue(undefined);
@@ -72,6 +74,9 @@ describe('launch worker timer coordination', () => {
     await vi.advanceTimersByTimeAsync(20_000);
 
     expect(connectDatabase).toHaveBeenCalledOnce();
+    expect(loadConfiguration).toHaveBeenCalledOnce();
+    expect(vi.mocked(loadConfiguration).mock.calls[0]?.[0]).toBe('testnet');
+    expect(createLaunchReader).toHaveBeenCalledOnce();
     expect(syncAssetIdentities).toHaveBeenCalledOnce();
     expect(finalizeTokenImages).toHaveBeenCalledOnce();
     expect(refreshLaunchState.mock.calls.length).toBeGreaterThanOrEqual(4);
@@ -114,6 +119,22 @@ describe('launch worker timer coordination', () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     await running;
+
+    expect(disconnectDatabase).toHaveBeenCalledOnce();
+  });
+
+  it('logs the failed network and error and disconnects after startup failure', async (): Promise<void> => {
+    const error = new Error('RPC unavailable');
+
+    vi.mocked(loadConfiguration).mockReturnValue({ network: 'testnet', pollIntervalMs: 5000 } as never);
+    vi.mocked(createLaunchReader).mockRejectedValueOnce(error);
+
+    await expect(runLaunchWorker()).rejects.toBe(error);
+
+    expect(log.error).toHaveBeenCalledWith(
+      { err: error, network: 'testnet' },
+      'Launch network worker failed',
+    );
 
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });

@@ -2,9 +2,9 @@ import { rpc, Account, contract } from '@stellar/stellar-sdk';
 
 import Launch from '../../models/Launch';
 import AssetIdentity from '../../models/AssetIdentity';
-import checkHorizonNetwork from './checkHorizonNetwork';
 import resolveAssetIdentity from './resolveAssetIdentity';
 import type { Configuration } from '../../types/configuration';
+import checkHorizonAvailability from './checkHorizonAvailability';
 
 const syncAssetIdentities = async (configuration: Configuration): Promise<number> => {
   const assets = await Launch.distinct('asset', {
@@ -42,13 +42,9 @@ const syncAssetIdentities = async (configuration: Configuration): Promise<number
     timeout: 15_000,
   });
 
-  const network = await server.getNetwork();
+  await server.getNetwork();
 
-  if (network.passphrase !== configuration.networkPassphrase) {
-    throw new Error('Stellar RPC network does not match the configured network');
-  }
-
-  await checkHorizonNetwork(configuration.horizonUrl, configuration.networkPassphrase);
+  await checkHorizonAvailability(configuration.horizonUrl);
 
   const source = new Account(contract.NULL_ACCOUNT, '0');
 
