@@ -8,7 +8,7 @@ const nextStatePollAt = (
 ): Date | null => {
   const seconds = BigInt(Math.floor(now.getTime() / 1000));
 
-  if (graduated || (seconds >= BigInt(target.endsAt) && sold === '0')) {
+  if (graduated || (target.endsAt !== null && seconds >= BigInt(target.endsAt) && sold === '0')) {
     return null;
   }
 

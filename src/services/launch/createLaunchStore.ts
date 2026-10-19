@@ -21,16 +21,22 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       Launch.distinct('factoryIndex', {
         ...identity,
         factoryIndex: { $gte: 1, $lte: count },
+        createdAt: { $type: 'date' },
       }),
 
     save: async (launch) => {
+      const { createdAt, creationLedger, creationTransactionHash, ...data } = launch;
+
       await Launch.updateOne(
         {
           ...identity,
           factoryIndex: launch.factoryIndex,
           contractId: launch.contractId,
         },
-        { $setOnInsert: { ...launch, nextStatePollAt: new Date(0) } },
+        {
+          $setOnInsert: { ...data, nextStatePollAt: new Date(0) },
+          ...(createdAt ? { $set: { createdAt, creationLedger, creationTransactionHash } } : {}),
+        },
         { upsert: true },
       );
     },
@@ -68,7 +74,10 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
 
         const params = (launch.config as { params?: Record<string, unknown> }).params;
 
-        if (typeof params?.starts_at !== 'string' || typeof params.ends_at !== 'string') {
+        if (
+          typeof params?.starts_at !== 'string' ||
+          (params.ends_at !== undefined && typeof params.ends_at !== 'string')
+        ) {
           throw new Error(`Launch ${launch.factoryIndex} has invalid schedule`);
         }
 
@@ -76,7 +85,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           factoryIndex: launch.factoryIndex,
           contractId: launch.contractId,
           startsAt: params.starts_at,
-          endsAt: params.ends_at,
+          endsAt: typeof params.ends_at === 'string' ? params.ends_at : null,
           graduated: launch.state.graduated === true,
           sold: String(launch.state.sold),
           claimedUntil,

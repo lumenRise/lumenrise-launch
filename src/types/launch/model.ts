@@ -18,6 +18,9 @@ interface LaunchData {
   state: Record<string, unknown>;
   asOfLedger: number;
   observedAt: Date;
+  createdAt?: Date | null;
+  creationLedger?: number | null;
+  creationTransactionHash?: string | null;
   stateAsOfLedger: number;
   stateObservedAt: Date;
   nextStatePollAt?: Date | null;

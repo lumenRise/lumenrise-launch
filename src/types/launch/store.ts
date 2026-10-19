@@ -4,7 +4,7 @@ interface StateTarget {
   factoryIndex: number;
   contractId: string;
   startsAt: string;
-  endsAt: string;
+  endsAt: string | null;
   graduated: boolean;
   sold?: string;
 }

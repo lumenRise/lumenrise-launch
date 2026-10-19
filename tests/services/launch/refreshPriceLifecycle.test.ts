@@ -43,6 +43,20 @@ describe('contract price polling lifecycle', () => {
   });
   afterEach(() => vi.useRealTimers());
 
+  it('continues polling a non-graduated curve without an expiry', async () => {
+    store.dueStateTargets.mockResolvedValue([{ ...target, endsAt: null }]);
+
+    await refresh();
+
+    expect(store.refreshState).toHaveBeenCalledWith(
+      1,
+      expect.anything(),
+      100,
+      new Date(now.getTime() + 900_000),
+      target.claimedUntil,
+    );
+  });
+
   it('does not report an old poll as refreshed when a newer trade owns its schedule', async () => {
     store.refreshState.mockResolvedValue(false);
 
