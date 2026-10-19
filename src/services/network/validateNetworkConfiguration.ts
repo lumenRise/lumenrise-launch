@@ -21,13 +21,6 @@ const validateNetworkConfiguration = (configuration: Readonly<NetworkConfigurati
     ) {
       throw new Error(`Invalid ${network} provider URL`);
     }
-
-    if (
-      url.hostname.endsWith('.stellar.org') &&
-      url.hostname.includes('testnet') !== (network === 'testnet')
-    ) {
-      throw new Error(`Provider URL does not match ${network}`);
-    }
   }
 
   if (!horizonUrl) {

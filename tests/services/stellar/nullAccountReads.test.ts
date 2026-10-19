@@ -29,7 +29,7 @@ vi.mock('../../../src/models/AssetIdentity', () => ({
   default: { find: vi.fn(), updateOne: vi.fn() },
 }));
 vi.mock('../../../src/services/stellar/readContract', () => ({ default: vi.fn() }));
-vi.mock('../../../src/services/stellar/checkHorizonNetwork', () => ({ default: vi.fn() }));
+vi.mock('../../../src/services/stellar/checkHorizonAvailability', () => ({ default: vi.fn() }));
 vi.mock('../../../src/services/stellar/resolveAssetIdentity', () => ({ default: vi.fn() }));
 
 const contractId = StrKey.encodeContract(Buffer.alloc(32, 1));
@@ -76,4 +76,22 @@ describe('automatic source for launch reads', () => {
       expect(assetSource.sequenceNumber()).toBe('0');
     },
   );
+
+  it('starts public reads and asset sync even when the RPC reports testnet', async (): Promise<void> => {
+    mocks.getNetwork.mockResolvedValue({ passphrase: Networks.TESTNET });
+
+    const configuration = {
+      network: 'public',
+      networkPassphrase: Networks.PUBLIC,
+      factoryContractId: contractId,
+      rpcUrl: 'https://soroban-testnet.stellar.org',
+      horizonUrl: 'https://horizon-testnet.stellar.org',
+    } as Configuration;
+
+    const reader = await createLaunchReader(configuration);
+
+    expect(reader.network).toBe('public');
+
+    await expect(syncAssetIdentities(configuration)).resolves.toBe(1);
+  });
 });
