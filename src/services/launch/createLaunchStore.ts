@@ -1,4 +1,5 @@
 import Launch from '../../models/Launch';
+import claimLaunchName from './claimLaunchName';
 import FactoryCursor from '../../models/FactoryCursor';
 import type { LaunchStore } from '../../types/launch/store';
 import type { Configuration } from '../../types/configuration';
@@ -26,6 +27,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
 
     save: async (launch) => {
       const { createdAt, creationLedger, creationTransactionHash, ...data } = launch;
+      const slug = await claimLaunchName(launch);
 
       await Launch.updateOne(
         {
@@ -34,7 +36,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           contractId: launch.contractId,
         },
         {
-          $setOnInsert: { ...data, nextStatePollAt: new Date(0) },
+          $setOnInsert: { ...data, slug, nextStatePollAt: new Date(0) },
           ...(createdAt ? { $set: { createdAt, creationLedger, creationTransactionHash } } : {}),
         },
         { upsert: true },
