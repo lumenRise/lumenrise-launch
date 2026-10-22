@@ -1,5 +1,6 @@
 import { StrKey } from '@stellar/stellar-sdk';
 
+import toLaunchSlug from './toLaunchSlug';
 import parseLaunchState from './parseLaunchState';
 import toPlainValue from '../stellar/toPlainValue';
 import type { LaunchData } from '../../types/launch/model';
@@ -78,6 +79,7 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
     factoryContractId,
     factoryIndex,
     contractId,
+    slug: toLaunchSlug(display.name),
     owner: launchParams.owner,
     asset: launchParams.asset,
     pair: launchParams.pair,
