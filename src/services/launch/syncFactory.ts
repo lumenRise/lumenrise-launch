@@ -1,4 +1,5 @@
 import log from '../../logger';
+import type { LaunchData } from '../../types/launch/model';
 import type { LaunchStore } from '../../types/launch/store';
 import type { LaunchReader } from '../../types/launch/reader';
 import type { Configuration } from '../../types/configuration';
@@ -41,30 +42,47 @@ const syncFactory = async (
     const config = await reader.launchConfig(contractId);
     const state = await reader.launchState(contractId);
 
-    const launch = parseLaunchConfig({
-      rawConfig: config.value,
-      rawState: state.value,
-      network: configuration.network,
-      factoryContractId: configuration.factoryContractId,
-      factoryIndex: index,
-      contractId,
-      asOfLedger: config.ledger,
-      stateAsOfLedger: state.ledger,
-    });
+    let launch: LaunchData;
 
-    if (reader.launchCreation) {
-      try {
-        const creation = await reader.launchCreation(contractId);
+    try {
+      launch = parseLaunchConfig({
+        rawConfig: config.value,
+        rawState: state.value,
+        network: configuration.network,
+        factoryContractId: configuration.factoryContractId,
+        factoryIndex: index,
+        contractId,
+        asOfLedger: config.ledger,
+        stateAsOfLedger: state.ledger,
+      });
 
-        if (creation) {
-          Object.assign(launch, creation);
+      if (reader.launchCreation) {
+        try {
+          const creation = await reader.launchCreation(contractId);
+
+          if (creation) {
+            Object.assign(launch, creation);
+          }
+        } catch (error) {
+          log.warn({ error, contractId }, 'Launch creation lookup unavailable; keeping date unknown');
         }
-      } catch (error) {
-        log.warn({ error, contractId }, 'Launch creation lookup unavailable; keeping date unknown');
       }
+
+      await store.save(launch);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'LaunchNameConflict') {
+        log.warn({ error, contractId }, 'Skipping conflicting launch name');
+
+        await store.advance(index + 1);
+
+        index += 1;
+
+        continue;
+      }
+
+      throw error;
     }
 
-    await store.save(launch);
     await store.advance(index + 1);
 
     log.info(

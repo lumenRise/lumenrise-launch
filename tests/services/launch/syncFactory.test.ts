@@ -458,4 +458,34 @@ describe('syncFactory', () => {
     expect(refreshed).toEqual([2]);
     expect(errors).toHaveLength(2);
   });
+
+  it('skips a name conflict and indexes the following launch', async () => {
+    const conflict = new Error('Name already taken');
+    const advance = vi.fn();
+    const save = vi.fn();
+
+    conflict.name = 'LaunchNameConflict';
+
+    save.mockRejectedValueOnce(conflict).mockResolvedValueOnce(undefined);
+
+    const reader = {
+      launchCount: async () => ({ value: 2, ledger: 100 }),
+      launchAt: async () => ({ value: childContractId, ledger: 100 }),
+      launchConfig: async () => ({ value: config, ledger: 100 }),
+      launchState: async () => ({ value: state, ledger: 100 }),
+    } as unknown as LaunchReader;
+
+    const store = {
+      nextIndex: async () => 1,
+      save,
+      advance,
+    } as unknown as LaunchStore;
+
+    await expect(syncFactory(reader, store, configuration)).resolves.toBe(1);
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(advance).toHaveBeenNthCalledWith(1, 2);
+    expect(advance).toHaveBeenNthCalledWith(2, 3);
+  });
+
 });

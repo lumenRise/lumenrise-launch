@@ -1,2 +1,1 @@
-# lumenrise-launch
-
+# Lumenrise Launch
