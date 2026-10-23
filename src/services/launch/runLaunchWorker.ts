@@ -6,10 +6,7 @@ import { connectDatabase, disconnectDatabase } from '../../db';
 import { loadConfiguration } from '../configuration/loadConfiguration';
 
 const runLaunchWorker = async (): Promise<void> => {
-  const configurations = ([
-    'testnet',
-    // 'public', // Public network automation is temporarily disabled.
-  ] as const)
+  const configurations = (['testnet', 'public'] as const)
     .filter((network) => getNetworkConfig(network).factoryContractId)
     .map(loadConfiguration);
 
