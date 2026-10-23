@@ -23,6 +23,10 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
     try {
       const links: Record<string, string> = {};
 
+      if (image.description) {
+        links['metadata.description'] = image.description;
+      }
+
       if (image.website) {
         links['metadata.website'] = image.website;
       }

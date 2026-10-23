@@ -50,10 +50,11 @@ describe('token image finalization', () => {
     );
   });
 
-  it('copies optional prelaunch links to the confirmed launch before finalizing', async () => {
+  it('copies the server description and optional prelaunch links to the confirmed launch before finalizing', async () => {
     vi.mocked(TokenImage.find).mockReturnValue({
       lean: vi.fn().mockResolvedValue([{
         ...image,
+        description: 'Full server description',
         website: 'https://project.example',
         xAccount: 'https://x.com/project',
       }]),
@@ -69,6 +70,7 @@ describe('token image finalization', () => {
       { network: 'testnet', contractId: 'CLAUNCH' },
       {
         $set: {
+          'metadata.description': 'Full server description',
           'metadata.website': 'https://project.example',
           'metadata.xAccount': 'https://x.com/project',
         },
