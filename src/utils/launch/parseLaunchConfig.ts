@@ -70,7 +70,7 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
     throw new Error('Launch config has invalid metadata');
   }
 
-  if (typeof display.description !== 'string' || typeof display.logo !== 'string') {
+  if (typeof display.logo !== 'string') {
     throw new Error('Launch config has invalid metadata');
   }
 
@@ -85,7 +85,7 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
     pair: launchParams.pair,
     metadata: {
       name: display.name,
-      description: display.description,
+      description: '',
       logo: display.logo,
       symbol: display.symbol,
     },
