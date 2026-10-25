@@ -24,6 +24,13 @@ const schema = defineConfig({
     type: 'number',
     default: 5_000,
   },
+  BASE_TESTNET_RPC_URL: { default: '' },
+  BASE_PUBLIC_RPC_URL: { default: '' },
+  BASE_TESTNET_FACTORY_ADDRESS: { default: '' },
+  BASE_PUBLIC_FACTORY_ADDRESS: { default: '' },
+  BASE_TESTNET_DEPLOYMENT_BLOCK: { default: '' },
+  BASE_PUBLIC_DEPLOYMENT_BLOCK: { default: '' },
+  BASE_LOG_BATCH_SIZE: { type: 'number', default: 500 },
   STELLAR_TESTNET_RPC_URL: {
     default: 'https://soroban-testnet.stellar.org',
   },

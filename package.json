@@ -8,19 +8,22 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node24 --outdir=dist",
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts src/base.ts --bundle --packages=external --platform=node --format=esm --target=node24 --outdir=dist",
     "start": "node dist/index.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "env:sync": "envyra sync --config src/env.config.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start:base": "node dist/base.js",
+    "dev:base": "tsx watch src/base.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "17.1.0",
     "amqplib": "0.10.9",
     "envyra": "^0.1.6",
     "mongoose": "9.10.1",
-    "pino": "^10.3.1"
+    "pino": "^10.3.1",
+    "viem": "^2.57.13"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
