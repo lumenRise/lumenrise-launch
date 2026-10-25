@@ -1,8 +1,11 @@
 import type { Types } from 'mongoose';
 
+import type { Chain } from './network/chain';
+
 interface TokenImageData {
   ownerIdentityId: Types.ObjectId;
   ownerAddress: string;
+  chain?: Chain;
   network: 'testnet' | 'public';
   objectKey: string;
   publicUrl: string;
