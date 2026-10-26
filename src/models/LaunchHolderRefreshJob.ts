@@ -4,6 +4,13 @@ import type { LaunchHolderJobRecord } from '../types/launch/holderJob';
 
 const schema = new Schema<LaunchHolderJobRecord>(
   {
+    chain: {
+      type: String,
+      enum: ['stellar', 'base'],
+      required: true,
+      default: 'stellar',
+      immutable: true,
+    },
     network: { type: String, enum: ['testnet', 'public'], required: true },
     contractId: { type: String, required: true },
     asset: { type: String, required: true },
@@ -19,13 +26,13 @@ const schema = new Schema<LaunchHolderJobRecord>(
 );
 
 schema.index(
-  { network: 1, contractId: 1, address: 1 },
-  { unique: true, name: 'launch_holder_jobs_wallet_unique' },
+  { chain: 1, network: 1, contractId: 1, address: 1 },
+  { unique: true, name: 'launch_holder_jobs_wallet_unique_chain' },
 );
 
 schema.index(
-  { network: 1, status: 1, scheduledAt: 1, leaseUntil: 1 },
-  { name: 'launch_holder_jobs_due' },
+  { chain: 1, network: 1, status: 1, scheduledAt: 1, leaseUntil: 1 },
+  { name: 'launch_holder_jobs_due_chain' },
 );
 
 const LaunchHolderRefreshJob = model<LaunchHolderJobRecord>('LaunchHolderRefreshJob', schema);
