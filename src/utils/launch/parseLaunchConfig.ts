@@ -17,6 +17,7 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
     asOfLedger,
     stateAsOfLedger,
   } = input;
+
   const config = toPlainValue(rawConfig);
 
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
@@ -75,6 +76,7 @@ const parseLaunchConfig = (input: LaunchConfigInput): LaunchData => {
   }
 
   return {
+    chain: 'stellar' as const,
     network,
     factoryContractId,
     factoryIndex,
