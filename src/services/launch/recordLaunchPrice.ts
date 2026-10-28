@@ -3,10 +3,12 @@ import LaunchPriceSample from '../../models/LaunchPriceSample';
 import parseTradeInteger from '../../utils/launch/parseTradeInteger';
 
 const recordLaunchPrice = async (
-  identity: { network: 'testnet' | 'public'; contractId: string },
+  identity: { chain?: 'stellar' | 'base'; network: 'testnet' | 'public'; contractId: string },
   read: { value: unknown; ledger: number },
   sampledAt = new Date(),
 ): Promise<void> => {
+  identity = { ...identity, chain: 'stellar' as const };
+
   const price = parseTradeInteger(read.value);
 
   if (
