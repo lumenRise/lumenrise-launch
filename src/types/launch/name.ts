@@ -1,3 +1,5 @@
+import type { ClientSession } from 'mongoose';
+
 import type { Chain } from '../network/chain';
 
 interface LaunchNameRecord {
@@ -12,3 +14,16 @@ interface LaunchNameRecord {
 }
 
 export type { LaunchNameRecord };
+
+interface IndexedLaunchNameInput {
+  chain: 'stellar' | 'base';
+  network: 'testnet' | 'public';
+  contractId: string;
+  ownerAddress: string;
+  publicUrl: string;
+  slug: string;
+  allowSuffix: boolean;
+  session?: ClientSession;
+}
+
+export type { IndexedLaunchNameInput };
