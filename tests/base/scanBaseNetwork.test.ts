@@ -1,12 +1,11 @@
-import { encodeAbiParameters, encodeEventTopics } from 'viem';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import Launch from '../../src/models/Launch';
 import BaseCursor from '../../src/models/BaseCursor';
 import createBaseLog from '../helpers/createBaseLog';
-import factoryAbi from '../../src/constants/base/factoryAbi';
 import getBaseContext from '../../src/services/base/getBaseContext';
 import type { BaseWriteContext } from '../../src/types/base/launch';
+import createBaseCreationLog from '../helpers/createBaseCreationLog';
 import scanBaseNetwork from '../../src/services/base/scanBaseNetwork';
 import acquireBaseLease from '../../src/services/base/acquireBaseLease';
 import releaseBaseLease from '../../src/services/base/releaseBaseLease';
@@ -26,17 +25,7 @@ const trade = createBaseLog(2);
 const factory = '0x3333333333333333333333333333333333333333';
 const asset = '0x4444444444444444444444444444444444444444';
 
-const creation = {
-  ...trade,
-  address: factory,
-  logIndex: 1,
-  topics: encodeEventTopics({
-    abi: factoryAbi,
-    eventName: 'LaunchCreated',
-    args: { launch: trade.address, owner: '0x2222222222222222222222222222222222222222' },
-  }),
-  data: encodeAbiParameters([{ type: 'uint32' }], [1]),
-};
+const creation = createBaseCreationLog();
 
 const context = {
   leaseOwner: 'worker-one',

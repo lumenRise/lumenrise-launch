@@ -11,11 +11,15 @@ const createBaseCreationLog = (index: number = 1): Log => ({
     abi: factoryAbi,
     eventName: 'LaunchCreated',
     args: {
-      launch: '0x1111111111111111111111111111111111111111',
+      index: BigInt(index),
+      curve: '0x1111111111111111111111111111111111111111',
       owner: '0x2222222222222222222222222222222222222222',
     },
   }) as Log['topics'],
-  data: encodeAbiParameters([{ type: 'uint32' }], [index]),
+  data: encodeAbiParameters(
+    [{ type: 'address' }, { type: 'uint256' }],
+    ['0x4444444444444444444444444444444444444444', 1_000_000n * 10n ** 18n],
+  ),
 });
 
 export default createBaseCreationLog;

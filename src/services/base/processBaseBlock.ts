@@ -59,7 +59,7 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     for (const log of logs) {
       if (
         log.address.toLowerCase() === configuration.factoryAddress &&
-        log.topics[0] === toEventSelector('LaunchCreated(address,address,uint32)')
+        log.topics[0] === toEventSelector('LaunchCreated(uint256,address,address,address,uint256)')
       ) {
         await indexBaseLaunch(eventContext, log, timestamp);
       }
@@ -124,17 +124,16 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
       }
 
       if (
-        log.topics[0] !== toEventSelector('Trade(address,bool,uint128,uint128,uint128,uint128)')
+        log.topics[0] !== toEventSelector('Bought(address,uint256,uint256,uint256)') &&
+        log.topics[0] !== toEventSelector('Sold(address,uint256,uint256,uint256)')
       ) {
         continue;
       }
 
-      const trade = decodeBaseTrade({ log, network: configuration.network, timestamp });
-
       const launch = await Launch.findOne({
         chain: 'base',
         network: configuration.network,
-        contractId: trade.contractId,
+        contractId: log.address.toLowerCase(),
         factoryContractId: configuration.factoryAddress,
       })
         .session(session)
@@ -144,6 +143,13 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         // Ignore identically named events from contracts outside our factory registry.
         continue;
       }
+
+      const trade = decodeBaseTrade({
+        log,
+        network: configuration.network,
+        timestamp,
+        assetDecimals: launch.assetDecimals!,
+      });
 
       await LaunchTrade.updateOne(
         {

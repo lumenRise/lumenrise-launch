@@ -42,7 +42,9 @@ beforeEach((): void => {
   vi.spyOn(BaseCheckpoint, 'updateOne').mockResolvedValue({} as never);
 
   vi.spyOn(Launch, 'findOne').mockReturnValue({
-    session: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ asset: 'token' }) }),
+    session: vi.fn().mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ asset: 'token', assetDecimals: 18, pairDecimals: 6 }),
+    }),
   } as never);
 
   vi.spyOn(LaunchTrade, 'updateOne').mockResolvedValue({} as never);

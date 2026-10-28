@@ -66,7 +66,9 @@ const scanBaseNetwork = async (network: 'testnet' | 'public'): Promise<void> => 
     }
 
     for (const log of factoryLogs) {
-      if (log.topics[0] === toEventSelector('LaunchCreated(address,address,uint32)')) {
+      if (
+        log.topics[0] === toEventSelector('LaunchCreated(uint256,address,address,address,uint256)')
+      ) {
         const { args } = decodeEventLog({
           abi: factoryAbi,
           data: log.data,
@@ -75,10 +77,10 @@ const scanBaseNetwork = async (network: 'testnet' | 'public'): Promise<void> => 
           strict: true,
         });
 
-        addresses.add(args.launch);
+        addresses.add(args.curve);
 
         const config = await client.readContract({
-          address: args.launch,
+          address: args.curve,
           abi: launchAbi,
           functionName: 'get_config',
           blockNumber: log.blockNumber!,
