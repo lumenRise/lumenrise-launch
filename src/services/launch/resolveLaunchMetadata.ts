@@ -1,10 +1,9 @@
 import TokenImage from '../../models/TokenImage';
 import type { LaunchData } from '../../types/launch/model';
 
-const resolveLaunchMetadata = async (
-  launch: LaunchData,
-): Promise<LaunchData['metadata']> => {
+const resolveLaunchMetadata = async (launch: LaunchData): Promise<LaunchData['metadata']> => {
   const image = await TokenImage.findOne({
+    chain: 'stellar' as const,
     network: launch.network,
     publicUrl: launch.metadata.logo,
     ownerAddress: launch.owner,

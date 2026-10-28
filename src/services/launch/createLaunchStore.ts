@@ -8,6 +8,7 @@ import type { ClaimedStateTarget } from '../../types/launch/store';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
   const identity = {
+    chain: 'stellar' as const,
     network: configuration.network,
     factoryContractId: configuration.factoryContractId,
   };

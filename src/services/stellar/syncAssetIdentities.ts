@@ -8,6 +8,7 @@ import checkHorizonAvailability from './checkHorizonAvailability';
 
 const syncAssetIdentities = async (configuration: Configuration): Promise<number> => {
   const assets = await Launch.distinct('asset', {
+    chain: 'stellar' as const,
     network: configuration.network,
   });
 

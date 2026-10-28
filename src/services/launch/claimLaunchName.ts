@@ -6,9 +6,12 @@ import toLaunchSlug from '../../utils/launch/toLaunchSlug';
 
 const claimLaunchName = async (launch: LaunchData): Promise<string> => {
   const existing = await Launch.findOne({
+    chain: 'stellar' as const,
     network: launch.network,
     contractId: launch.contractId,
-  }).select('slug').lean();
+  })
+    .select('slug')
+    .lean();
 
   if (existing?.slug) {
     return existing.slug;
@@ -17,16 +20,16 @@ const claimLaunchName = async (launch: LaunchData): Promise<string> => {
   const slug = toLaunchSlug(launch.metadata.name);
 
   const image = await TokenImage.findOne({
+    chain: 'stellar' as const,
     network: launch.network,
     publicUrl: launch.metadata.logo,
     ownerAddress: launch.owner,
   }).lean();
 
-  if (
-    image?.slug &&
-    (image.status === 'expired' || image.slug !== slug)
-  ) {
-    const conflict = new Error('On-chain project name does not match an active prelaunch reservation');
+  if (image?.slug && (image.status === 'expired' || image.slug !== slug)) {
+    const conflict = new Error(
+      'On-chain project name does not match an active prelaunch reservation',
+    );
 
     conflict.name = 'LaunchNameConflict';
 
@@ -36,6 +39,7 @@ const claimLaunchName = async (launch: LaunchData): Promise<string> => {
   try {
     await LaunchName.findOneAndUpdate(
       {
+        chain: 'stellar' as const,
         network: launch.network,
         slug,
         ownerAddress: launch.owner,
@@ -48,6 +52,7 @@ const claimLaunchName = async (launch: LaunchData): Promise<string> => {
       {
         $set: { contractId: launch.contractId, status: 'indexed' },
         $setOnInsert: {
+          chain: 'stellar' as const,
           network: launch.network,
           slug,
           ownerAddress: launch.owner,

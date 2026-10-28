@@ -7,7 +7,9 @@ import type { LaunchData } from '../../../src/types/launch/model';
 import claimLaunchName from '../../../src/services/launch/claimLaunchName';
 
 vi.mock('../../../src/models/Launch', () => ({ default: { findOne: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchName', () => ({ default: { findOneAndUpdate: vi.fn() } }));
+
 vi.mock('../../../src/models/TokenImage', () => ({ default: { findOne: vi.fn() } }));
 
 const launch = {
@@ -25,7 +27,10 @@ describe('launch name claims', () => {
       select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
     } as never);
 
-    vi.mocked(TokenImage.findOne).mockReturnValue({ lean: vi.fn().mockResolvedValue(null) } as never);
+    vi.mocked(TokenImage.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue(null),
+    } as never);
+
     vi.mocked(LaunchName.findOneAndUpdate).mockResolvedValue({} as never);
   });
 
@@ -34,6 +39,7 @@ describe('launch name claims', () => {
 
     expect(LaunchName.findOneAndUpdate).toHaveBeenCalledWith(
       {
+        chain: 'stellar',
         network: 'testnet',
         slug: 'blue-man',
         ownerAddress: 'owner',
@@ -64,7 +70,9 @@ describe('launch name claims', () => {
     { slug: 'other-project', status: 'pending' },
     { slug: 'blue-man', status: 'expired' },
   ])('rejects a mismatched or released prelaunch: %j', async (image) => {
-    vi.mocked(TokenImage.findOne).mockReturnValue({ lean: vi.fn().mockResolvedValue(image) } as never);
+    vi.mocked(TokenImage.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue(image),
+    } as never);
 
     await expect(claimLaunchName(launch)).rejects.toMatchObject({ name: 'LaunchNameConflict' });
 
@@ -83,13 +91,15 @@ describe('launch name claims', () => {
 
   it('preserves a migrated legacy slug during reconciliation', async () => {
     vi.mocked(Launch.findOne).mockReturnValue({
-      select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ slug: 'blue-man-legacy' }) }),
+      select: vi
+        .fn()
+        .mockReturnValue({ lean: vi.fn().mockResolvedValue({ slug: 'blue-man-legacy' }) }),
     } as never);
 
     await expect(claimLaunchName(launch)).resolves.toBe('blue-man-legacy');
 
     expect(LaunchName.findOneAndUpdate).not.toHaveBeenCalled();
+
     expect(TokenImage.findOne).not.toHaveBeenCalled();
   });
-
 });
