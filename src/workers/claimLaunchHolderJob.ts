@@ -9,6 +9,7 @@ const claimLaunchHolderJob = async (
 ) =>
   LaunchHolderRefreshJob.findOneAndUpdate(
     {
+      chain: 'stellar' as const,
       network,
       ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       $or: [

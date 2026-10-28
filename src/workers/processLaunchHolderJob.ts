@@ -23,7 +23,12 @@ const processLaunchHolderJob = async (
   };
 
   try {
-    const identity = { network: job.network, contractId: job.contractId };
+    const identity = {
+      chain: 'stellar' as const,
+      network: job.network,
+      contractId: job.contractId,
+    };
+
     const launch = await Launch.findOne(identity).lean();
 
     if (!launch || launch.asset !== job.asset) {
