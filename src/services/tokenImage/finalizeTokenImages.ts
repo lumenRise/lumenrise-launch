@@ -5,12 +5,14 @@ import type { Configuration } from '../../types/configuration';
 
 const finalizeTokenImages = async (configuration: Configuration): Promise<void> => {
   const pending = await TokenImage.find({
+    chain: 'stellar' as const,
     network: configuration.network,
     status: { $in: ['pending', 'cleanup_ready'] },
   }).lean();
 
   for (const image of pending) {
     const launch = await Launch.findOne({
+      chain: 'stellar' as const,
       network: configuration.network,
       owner: image.ownerAddress,
       'metadata.logo': image.publicUrl,
@@ -37,7 +39,11 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
 
       if (Object.keys(links).length > 0) {
         await Launch.updateOne(
-          { network: configuration.network, contractId: launch.contractId },
+          {
+            chain: 'stellar' as const,
+            network: configuration.network,
+            contractId: launch.contractId,
+          },
           { $set: links },
         );
       }
@@ -61,8 +67,10 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
           { imageId: image._id, assetContractId: launch.asset },
           'Token already has a linked image',
         );
+
         continue;
       }
+
       throw error;
     }
   }

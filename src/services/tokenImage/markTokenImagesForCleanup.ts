@@ -9,6 +9,7 @@ const markTokenImagesForCleanup = async (
   const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60_000);
 
   const candidates = await TokenImage.find({
+    chain: 'stellar' as const,
     network: configuration.network,
     status: 'pending',
     createdAt: { $lte: cutoff },
@@ -21,6 +22,7 @@ const markTokenImagesForCleanup = async (
 
   for (const image of candidates) {
     const launch = await Launch.exists({
+      chain: 'stellar' as const,
       network: configuration.network,
       owner: image.ownerAddress,
       'metadata.logo': image.publicUrl,
@@ -40,6 +42,7 @@ const markTokenImagesForCleanup = async (
         },
       },
     );
+
     marked += result.modifiedCount;
   }
 

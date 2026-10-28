@@ -5,12 +5,17 @@ import TokenImage from '../../../src/models/TokenImage';
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 
 vi.mock('../../../src/logger', () => ({ default: { warn: vi.fn() } }));
-vi.mock('../../../src/models/Launch', () => ({ default: { findOne: vi.fn(), updateOne: vi.fn() } }));
+
+vi.mock('../../../src/models/Launch', () => ({
+  default: { findOne: vi.fn(), updateOne: vi.fn() },
+}));
+
 vi.mock('../../../src/models/TokenImage', () => ({
   default: { find: vi.fn(), updateOne: vi.fn() },
 }));
 
 const configuration = { network: 'testnet' } as Parameters<typeof finalizeTokenImages>[0];
+
 const image = {
   _id: 'image1',
   ownerAddress: 'GWALLET',
@@ -20,6 +25,7 @@ const image = {
 describe('token image finalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
     vi.mocked(TokenImage.find).mockReturnValue({
       lean: vi.fn().mockResolvedValue([image]),
     } as never);
@@ -33,11 +39,14 @@ describe('token image finalization', () => {
     await finalizeTokenImages(configuration);
 
     expect(Launch.updateOne).not.toHaveBeenCalled();
+
     expect(Launch.findOne).toHaveBeenCalledWith({
+      chain: 'stellar',
       network: 'testnet',
       owner: image.ownerAddress,
       'metadata.logo': image.publicUrl,
     });
+
     expect(TokenImage.updateOne).toHaveBeenCalledWith(
       { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
       {
@@ -52,12 +61,14 @@ describe('token image finalization', () => {
 
   it('copies the server description and optional prelaunch links to the confirmed launch before finalizing', async () => {
     vi.mocked(TokenImage.find).mockReturnValue({
-      lean: vi.fn().mockResolvedValue([{
-        ...image,
-        description: 'Full server description',
-        website: 'https://project.example',
-        xAccount: 'https://x.com/project',
-      }]),
+      lean: vi.fn().mockResolvedValue([
+        {
+          ...image,
+          description: 'Full server description',
+          website: 'https://project.example',
+          xAccount: 'https://x.com/project',
+        },
+      ]),
     } as never);
 
     vi.mocked(Launch.findOne).mockReturnValue({
@@ -67,7 +78,7 @@ describe('token image finalization', () => {
     await finalizeTokenImages(configuration);
 
     expect(Launch.updateOne).toHaveBeenCalledWith(
-      { network: 'testnet', contractId: 'CLAUNCH' },
+      { chain: 'stellar', network: 'testnet', contractId: 'CLAUNCH' },
       {
         $set: {
           'metadata.description': 'Full server description',
@@ -91,13 +102,16 @@ describe('token image finalization', () => {
 
     expect(TokenImage.updateOne).not.toHaveBeenCalled();
   });
+
   it('keeps processing images when another image already owns the token', async () => {
     vi.mocked(TokenImage.find).mockReturnValue({
       lean: vi.fn().mockResolvedValue([image, { ...image, _id: 'image2' }]),
     } as never);
+
     vi.mocked(Launch.findOne).mockReturnValue({
       lean: vi.fn().mockResolvedValue({ contractId: 'CLAUNCH', asset: 'CASSET' }),
     } as never);
+
     vi.mocked(TokenImage.updateOne)
       .mockRejectedValueOnce({ code: 11000 })
       .mockResolvedValueOnce({ modifiedCount: 1 } as never);
@@ -111,7 +125,9 @@ describe('token image finalization', () => {
     vi.mocked(Launch.findOne).mockReturnValue({
       lean: vi.fn().mockResolvedValue({ contractId: 'CLAUNCH', asset: 'CASSET' }),
     } as never);
+
     vi.mocked(TokenImage.updateOne).mockRejectedValueOnce(new Error('Database unavailable'));
+
     await expect(finalizeTokenImages(configuration)).rejects.toThrow('Database unavailable');
   });
 });
