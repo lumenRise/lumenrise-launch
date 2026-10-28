@@ -8,6 +8,7 @@ import TokenImage from '../../models/TokenImage';
 import factoryAbi from '../../constants/base/factoryAbi';
 import toLaunchSlug from '../../utils/launch/toLaunchSlug';
 import type { BaseEventContext } from '../../types/base/launch';
+import claimIndexedLaunchName from '../launch/claimIndexedLaunchName';
 
 const indexBaseLaunch = async (
   context: BaseEventContext,
@@ -38,28 +39,36 @@ const indexBaseLaunch = async (
     blockNumber: log.blockNumber,
   });
 
-  if (registered.toLowerCase() !== args.launch.toLowerCase() || args.index < 1) {
+  if (
+    registered.toLowerCase() !== args.curve.toLowerCase() ||
+    args.index < 1n ||
+    args.index > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
     throw new Error('Base launch is not registered by the configured factory');
   }
 
   const read = await readBaseLaunch({
     context,
-    address: args.launch,
+    address: args.curve,
     blockNumber: log.blockNumber,
   });
 
   const params = read.config.params;
   const owner = params.owner.toLowerCase();
-  const slug = toLaunchSlug(params.metadata.name);
+  let slug = toLaunchSlug(params.metadata.name);
 
   const identity = {
     chain: 'base' as const,
     network: context.configuration.network,
-    contractId: args.launch.toLowerCase(),
+    contractId: args.curve.toLowerCase(),
   };
 
-  if (owner !== args.owner.toLowerCase()) {
-    throw new Error('Base launch owner mismatch');
+  if (
+    owner !== args.owner.toLowerCase() ||
+    params.asset.toLowerCase() !== args.asset.toLowerCase() ||
+    read.config.total_supply !== args.deposited
+  ) {
+    throw new Error('Base launch creation data mismatch');
   }
 
   const reservation = await LaunchName.findOne({
@@ -95,21 +104,16 @@ const indexBaseLaunch = async (
     throw new Error('Base prelaunch reference does not match the launch owner and metadata');
   }
 
-  await LaunchName.findOneAndUpdate(
-    {
-      chain: 'base',
-      network: identity.network,
-      slug,
-      ownerAddress: owner,
-      publicUrl: params.metadata.logo,
-      $or: [
-        { contractId: null, status: 'reserved' },
-        { contractId: identity.contractId, status: 'indexed' },
-      ],
-    },
-    { $set: { contractId: identity.contractId, status: 'indexed' } },
-    { upsert: true, session: context.session },
-  );
+  slug = await claimIndexedLaunchName({
+    chain: 'base',
+    network: identity.network,
+    contractId: identity.contractId,
+    ownerAddress: owner,
+    publicUrl: params.metadata.logo,
+    slug,
+    allowSuffix: !reservation && !image,
+    session: context.session,
+  });
 
   const metadata = {
     name: params.metadata.name,
@@ -127,11 +131,13 @@ const indexBaseLaunch = async (
         ...identity,
         factoryContractId: context.configuration.factoryAddress,
         prelaunchId: imageId,
-        factoryIndex: args.index,
+        factoryIndex: Number(args.index),
         slug,
         owner,
         asset: params.asset.toLowerCase(),
         pair: params.pair.toLowerCase(),
+        assetDecimals: read.assetDecimals,
+        pairDecimals: read.pairDecimals,
         metadata,
         config: read.plainConfig,
         state: read.state,

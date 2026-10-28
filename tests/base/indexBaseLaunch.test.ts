@@ -31,6 +31,7 @@ beforeEach((): void => {
 
   vi.mocked(readBaseLaunch).mockResolvedValue({
     config: {
+      total_supply: 1_000_000n * 10n ** 18n,
       params: {
         owner,
         asset: '0x4444444444444444444444444444444444444444',
@@ -46,6 +47,8 @@ beforeEach((): void => {
     plainConfig: {},
     state: { sold: '0' },
     price: 1n,
+    assetDecimals: 18,
+    pairDecimals: 6,
   } as never);
 
   vi.spyOn(LaunchName, 'findOne').mockReturnValue({
