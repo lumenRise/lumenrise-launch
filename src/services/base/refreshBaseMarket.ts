@@ -46,7 +46,7 @@ const refreshBaseMarket = async (
         sampledAt: observedAt,
         ledger: Number(blockNumber),
         price: read.price.toString(),
-        priceSort: read.price.toString().padStart(39, '0'),
+        priceSort: read.price.toString().padStart(78, '0'),
       },
     },
     { upsert: true, session: context.session },

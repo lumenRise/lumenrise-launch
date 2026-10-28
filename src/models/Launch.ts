@@ -37,6 +37,8 @@ const launchSchema = new Schema<LaunchData>(
     owner: { type: String, required: true, immutable: true },
     asset: { type: String, required: true, immutable: true },
     pair: { type: String, required: true, immutable: true },
+    assetDecimals: { type: Number, min: 0, max: 18, immutable: true },
+    pairDecimals: { type: Number, min: 0, max: 18, immutable: true },
     metadata: { type: metadataSchema, required: true },
     config: { type: Schema.Types.Mixed, required: true, immutable: true },
     state: { type: Schema.Types.Mixed, required: true },

@@ -33,6 +33,8 @@ interface BaseLaunchSnapshot {
   plainConfig: Record<string, unknown>;
   state: Record<string, unknown>;
   price: bigint;
+  assetDecimals: number;
+  pairDecimals: number;
 }
 
 export type {

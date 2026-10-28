@@ -44,8 +44,14 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
     blockNumber,
   });
 
-  if (assetDecimals !== 7 || pairDecimals !== 7 || price <= 0n) {
-    throw new Error('Provisional Base contracts require 7-decimal tokens and a positive price');
+  if (
+    assetDecimals > 18 ||
+    pairDecimals > 18 ||
+    price <= 0n ||
+    price >= 2n ** 256n ||
+    state.buyer_count > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
+    throw new Error('Unsupported Base token decimals, price or buyer count');
   }
 
   const plainConfig = JSON.parse(
@@ -59,6 +65,8 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
       typeof value === 'bigint' ? value.toString() : value,
     ),
   ) as Record<string, unknown>;
+
+  plainState.buyer_count = Number(state.buyer_count);
 
   const params = plainConfig.params as Record<string, unknown>;
   const vesting = params.vesting as Record<string, unknown>;
@@ -76,7 +84,7 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
 
   vesting.schedule = schedule;
 
-  return { config, plainConfig, state: plainState, price };
+  return { config, plainConfig, state: plainState, price, assetDecimals, pairDecimals };
 };
 
 export default readBaseLaunch;

@@ -11,6 +11,8 @@ interface LaunchData {
   owner: string;
   asset: string;
   pair: string;
+  assetDecimals?: number;
+  pairDecimals?: number;
   metadata: {
     name: string;
     description: string;
