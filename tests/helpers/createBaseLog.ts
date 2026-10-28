@@ -3,7 +3,7 @@ import { encodeEventTopics, encodeAbiParameters } from 'viem';
 
 import launchAbi from '../../src/constants/base/launchAbi';
 
-const createBaseLog = (index: number = 0): Log => ({
+const createBaseLog = (index: number = 0, side: 'buy' | 'sell' = 'buy'): Log => ({
   address: '0x1111111111111111111111111111111111111111',
   blockNumber: 20n,
   blockHash: `0x${'a'.repeat(64)}`,
@@ -11,20 +11,20 @@ const createBaseLog = (index: number = 0): Log => ({
   transactionIndex: 1,
   logIndex: index,
   removed: false,
-  topics: encodeEventTopics({
-    abi: launchAbi,
-    eventName: 'Trade',
-    args: { trader: '0x2222222222222222222222222222222222222222' },
-  }) as Log['topics'],
+  topics: (side === 'buy'
+    ? encodeEventTopics({
+        abi: launchAbi,
+        eventName: 'Bought',
+        args: { buyer: '0x2222222222222222222222222222222222222222' },
+      })
+    : encodeEventTopics({
+        abi: launchAbi,
+        eventName: 'Sold',
+        args: { seller: '0x2222222222222222222222222222222222222222' },
+      })) as Log['topics'],
   data: encodeAbiParameters(
-    [
-      { type: 'bool' },
-      { type: 'uint128' },
-      { type: 'uint128' },
-      { type: 'uint128' },
-      { type: 'uint128' },
-    ],
-    [true, 10_000_000n, 20_000_000n, 100_000n, 20_100_000n],
+    [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+    side === 'buy' ? [20_100_000n, 10n ** 18n, 100_000n] : [10n ** 18n, 19_900_000n, 100_000n],
   ),
 });
 

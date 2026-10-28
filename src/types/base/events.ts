@@ -1,16 +1,8 @@
 import type { Log } from 'viem';
 
-interface BaseTradeEvent {
-  trader: string;
-  isBuy: boolean;
-  assetAmount: bigint;
-  grossAmount: bigint;
-  creatorFee: bigint;
-  userAmount: bigint;
-}
-
 interface BaseTradeInput {
   network: 'testnet' | 'public';
+  assetDecimals: number;
   log: Log;
   timestamp: bigint;
 }
@@ -33,4 +25,4 @@ interface BaseCheckpointRecord {
   finalized: boolean;
 }
 
-export type { BaseCheckpointRecord, BaseTradeEvent, BaseTradeInput, BaseCursorRecord };
+export type { BaseCheckpointRecord, BaseTradeInput, BaseCursorRecord };

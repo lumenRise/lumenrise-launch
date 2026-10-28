@@ -5,7 +5,7 @@ import type { TradeRecord } from '../../types/launch/market';
 import type { BaseTradeInput } from '../../types/base/events';
 
 const decodeBaseTrade = (input: BaseTradeInput): TradeRecord => {
-  const { log, network, timestamp } = input;
+  const { log, network, timestamp, assetDecimals } = input;
 
   if (
     log.removed ||
@@ -15,37 +15,45 @@ const decodeBaseTrade = (input: BaseTradeInput): TradeRecord => {
     log.transactionIndex === null ||
     log.logIndex === null ||
     log.blockNumber > BigInt(Number.MAX_SAFE_INTEGER) ||
-    timestamp > 8_640_000_000_000n
+    timestamp > 8_640_000_000_000n ||
+    !Number.isInteger(assetDecimals) ||
+    assetDecimals < 0 ||
+    assetDecimals > 18
   ) {
-    throw new Error('Invalid Base trade log position');
+    throw new Error('Invalid Base trade log position or token decimals');
   }
 
   const decoded = decodeEventLog({
     abi: launchAbi,
     data: log.data,
     topics: log.topics,
-    eventName: 'Trade',
     strict: true,
   });
 
-  const event = decoded.args;
+  if (decoded.eventName !== 'Bought' && decoded.eventName !== 'Sold') {
+    throw new Error('Unsupported Base trade event');
+  }
+
+  const isBuy = decoded.eventName === 'Bought';
+  const trader = decoded.eventName === 'Bought' ? decoded.args.buyer : decoded.args.seller;
+  const assetAmount = decoded.eventName === 'Bought' ? decoded.args.received : decoded.args.amount;
+
+  const grossAmount =
+    decoded.eventName === 'Bought'
+      ? decoded.args.payment - decoded.args.creator_fee
+      : decoded.args.received + decoded.args.creator_fee;
 
   if (
-    event.assetAmount <= 0n ||
-    event.grossAmount <= 0n ||
-    event.userAmount !==
-      (event.isBuy ? event.grossAmount + event.creatorFee : event.grossAmount - event.creatorFee) ||
-    event.userAmount < 0n ||
-    /^0x0{40}$/i.test(event.trader)
+    assetAmount <= 0n ||
+    grossAmount <= 0n ||
+    assetAmount >= 2n ** 128n ||
+    grossAmount >= 2n ** 128n ||
+    /^0x0{40}$/i.test(trader)
   ) {
     throw new Error('Invalid Base trade amounts');
   }
 
-  const price = (event.grossAmount * 10_000_000n + event.assetAmount - 1n) / event.assetAmount;
-
-  if (price.toString().length > 39) {
-    throw new Error('Base trade price exceeds the supported contract range');
-  }
+  const price = (grossAmount * 10n ** BigInt(assetDecimals) + assetAmount - 1n) / assetAmount;
 
   return {
     chain: 'base',
@@ -56,10 +64,10 @@ const decodeBaseTrade = (input: BaseTradeInput): TradeRecord => {
     transactionIndex: log.transactionIndex,
     ledger: Number(log.blockNumber),
     tradedAt: new Date(Number(timestamp) * 1000),
-    trader: event.trader.toLowerCase(),
-    side: event.isBuy ? 'buy' : 'sell',
-    assetAmount: event.assetAmount.toString(),
-    grossAmount: event.grossAmount.toString(),
+    trader: trader.toLowerCase(),
+    side: isBuy ? 'buy' : 'sell',
+    assetAmount: assetAmount.toString(),
+    grossAmount: grossAmount.toString(),
     executionPrice: price.toString(),
   };
 };
