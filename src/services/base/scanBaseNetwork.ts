@@ -1,6 +1,7 @@
 import type { Log, Address } from 'viem';
 import { decodeEventLog, toEventSelector } from 'viem';
 
+import log from '../../logger';
 import Launch from '../../models/Launch';
 import getBaseContext from './getBaseContext';
 import BaseCursor from '../../models/BaseCursor';
@@ -144,6 +145,20 @@ const scanBaseNetwork = async (network: 'testnet' | 'public'): Promise<void> => 
         refreshDue: number === toBlock,
       });
     }
+
+    log.info(
+      {
+        chain: 'base',
+        network,
+        factoryContractId: configuration.factoryAddress,
+        fromBlock: fromBlock.toString(),
+        toBlock: toBlock.toString(),
+        headBlock: head.toString(),
+        eventCount: logs.length,
+        caughtUp: toBlock === head,
+      },
+      'Base block scan completed',
+    );
   } finally {
     await releaseBaseLease(context);
   }

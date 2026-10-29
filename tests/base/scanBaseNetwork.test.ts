@@ -11,6 +11,8 @@ import acquireBaseLease from '../../src/services/base/acquireBaseLease';
 import releaseBaseLease from '../../src/services/base/releaseBaseLease';
 import processBaseBlock from '../../src/services/base/processBaseBlock';
 
+vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
 
 vi.mock('../../src/services/base/acquireBaseLease', () => ({ default: vi.fn() }));
