@@ -1,7 +1,5 @@
-import { setTimeout as delay } from 'node:timers/promises';
-
 import log from '../../logger';
-import scanBaseNetwork from './scanBaseNetwork';
+import runBaseScanLoop from './runBaseScanLoop';
 import getBaseConfiguration from './getBaseConfiguration';
 import type { BaseConfiguration } from '../../types/base/configuration';
 
@@ -9,40 +7,27 @@ const runBaseWorker = async (
   signal: AbortSignal,
   networks: BaseConfiguration['network'][],
 ): Promise<void> => {
-  if (networks.length === 0) {
+  if (networks.length === 0 || signal.aborted) {
     return;
   }
 
   for (const network of networks) {
     log.info(
-      {
-        chain: 'base',
-        network,
-        factoryContractId: getBaseConfiguration(network)?.factoryAddress,
-      },
+      { chain: 'base', network, factoryContractId: getBaseConfiguration(network)?.factoryAddress },
       'Base launch worker started',
     );
   }
 
-  while (!signal.aborted) {
-    for (const network of networks) {
-      if (signal.aborted) {
-        break;
-      }
+  const workers = networks.flatMap((network): Promise<void>[] => [
+    runBaseScanLoop(signal, network, 'live'),
+    runBaseScanLoop(signal, network, 'history'),
+  ]);
 
-      try {
-        await scanBaseNetwork(network);
-      } catch (error) {
-        log.error({ error, chain: 'base', network }, 'Base scan failed; cursor retained for retry');
-      }
-    }
+  const results = await Promise.allSettled(workers);
 
-    try {
-      await delay(2_000, undefined, { signal });
-    } catch (error) {
-      if (!signal.aborted) {
-        throw error;
-      }
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      throw result.reason;
     }
   }
 };
