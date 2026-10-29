@@ -62,7 +62,9 @@ const refreshLaunchState = async (
           graduated: state.graduated,
           nextStatePollAt: nextPollAt,
         },
-        nextPollAt === null ? 'Launch polling stopped' : 'Launch state refresh completed',
+        nextPollAt === null
+          ? 'Stellar launch polling stopped'
+          : 'Stellar launch state refresh completed',
       );
 
       refreshed += 1;

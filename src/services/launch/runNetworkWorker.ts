@@ -29,10 +29,11 @@ const runNetworkWorker = async (
 
     log.info(
       {
+        chain: 'stellar',
         network: configuration.network,
         factoryContractId: configuration.factoryContractId,
       },
-      'Launch worker started',
+      'Stellar launch worker started',
     );
 
     let reconcileFactory = true;
@@ -74,7 +75,7 @@ const runNetworkWorker = async (
 
           log.info(
             { count: added, factoryContractId: configuration.factoryContractId },
-            'Launches indexed',
+            'Stellar launches indexed',
           );
         }
       },
@@ -97,11 +98,11 @@ const runNetworkWorker = async (
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
           log.warn(
             { err: error, network: reader.network, contractId, retryDelayMs: 30_000 },
-            'Launch state refresh failed',
+            'Stellar launch state refresh failed',
           );
         });
       } catch (error) {
-        log.error({ err: error }, 'Launch state polling failed');
+        log.error({ err: error }, 'Stellar launch state polling failed');
       }
 
       try {

@@ -55,7 +55,7 @@ const recordLaunchPrice = async (
           priceScale: 7,
           sampledAt,
         },
-        'Launch price observation recorded',
+        'Stellar launch price observation recorded',
       );
     }
   } catch (error) {
