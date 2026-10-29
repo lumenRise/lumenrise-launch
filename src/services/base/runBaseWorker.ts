@@ -1,66 +1,49 @@
-import mongoose from 'mongoose';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import env from '../../env';
 import log from '../../logger';
 import scanBaseNetwork from './scanBaseNetwork';
-import BaseCursor from '../../models/BaseCursor';
-import BaseCheckpoint from '../../models/BaseCheckpoint';
 import getBaseConfiguration from './getBaseConfiguration';
+import type { BaseConfiguration } from '../../types/base/configuration';
 
-const runBaseWorker = async (): Promise<void> => {
-  const networks = (
-    [
-      'testnet',
-      // 'public',
-    ] as const
-  ).filter((network): boolean => getBaseConfiguration(network) !== null);
-
+const runBaseWorker = async (
+  signal: AbortSignal,
+  networks: BaseConfiguration['network'][],
+): Promise<void> => {
   if (networks.length === 0) {
-    log.info('Base is disabled; configure RPC, factory address and deployment block to enable it');
-
     return;
   }
 
-  const controller = new AbortController();
-  const stop = (): void => controller.abort();
+  for (const network of networks) {
+    log.info(
+      {
+        chain: 'base',
+        network,
+        factoryContractId: getBaseConfiguration(network)?.factoryAddress,
+      },
+      'Base launch worker started',
+    );
+  }
 
-  process.once('SIGINT', stop);
-
-  process.once('SIGTERM', stop);
-
-  mongoose.set('autoIndex', false);
-
-  await mongoose.connect(env.DB_URI, { dbName: env.DB_NAME });
-
-  try {
-    await BaseCursor.createIndexes();
-
-    await BaseCheckpoint.createIndexes();
-
-    while (!controller.signal.aborted) {
-      for (const network of networks) {
-        try {
-          await scanBaseNetwork(network);
-        } catch (error) {
-          log.error({ error, network }, 'Base scan failed; cursor retained for retry');
-        }
+  while (!signal.aborted) {
+    for (const network of networks) {
+      if (signal.aborted) {
+        break;
       }
 
       try {
-        await delay(2_000, undefined, { signal: controller.signal });
+        await scanBaseNetwork(network);
       } catch (error) {
-        if (!controller.signal.aborted) {
-          throw error;
-        }
+        log.error({ error, chain: 'base', network }, 'Base scan failed; cursor retained for retry');
       }
     }
-  } finally {
-    process.removeListener('SIGINT', stop);
 
-    process.removeListener('SIGTERM', stop);
-
-    await mongoose.disconnect();
+    try {
+      await delay(2_000, undefined, { signal });
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error;
+      }
+    }
   }
 };
 
