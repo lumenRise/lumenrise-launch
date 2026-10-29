@@ -5,7 +5,7 @@ import type { Configuration } from '../../../src/types/configuration';
 import createLaunchStore from '../../../src/services/launch/createLaunchStore';
 
 vi.mock('../../../src/models/Launch', () => ({
-  default: { findOneAndUpdate: vi.fn(), updateOne: vi.fn(), exists: vi.fn() },
+  default: { findOneAndUpdate: vi.fn(), updateOne: vi.fn(), exists: vi.fn(), distinct: vi.fn() },
 }));
 
 const now = new Date('2026-10-17T00:00:00Z');
@@ -74,6 +74,21 @@ describe('exclusive launch polling and trade schedule ownership', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('recognizes indexed launches even when their creation date is unavailable', async () => {
+    const store = createLaunchStore(configuration);
+
+    vi.mocked(Launch.distinct).mockResolvedValue([5]);
+
+    expect(await store.indexedIndexes(8)).toEqual([5]);
+
+    expect(Launch.distinct).toHaveBeenCalledWith('factoryIndex', {
+      chain: 'stellar',
+      network: 'testnet',
+      factoryContractId: 'factory',
+      factoryIndex: { $gte: 1, $lte: 8 },
+    });
+  });
 
   it('allows only one worker to claim a due launch and recovers an abandoned claim', async () => {
     const first = createLaunchStore(configuration);

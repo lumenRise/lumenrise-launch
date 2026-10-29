@@ -24,7 +24,6 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       Launch.distinct('factoryIndex', {
         ...identity,
         factoryIndex: { $gte: 1, $lte: count },
-        createdAt: { $type: 'date' },
       }),
 
     save: async (launch) => {
