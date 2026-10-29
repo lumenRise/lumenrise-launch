@@ -1,5 +1,5 @@
 const rpcLimits = {
-  baseLogBlockRange: 150,
+  baseLogBlockRange: 199,
   stellarTransactionPageSize: 200,
 } as const;
 
