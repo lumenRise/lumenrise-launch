@@ -53,7 +53,7 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
       throw new Error('Base block conflicts with stored checkpoint');
     }
 
-    const eventContext = { ...context, session };
+    const eventContext = { ...context, session, events };
 
     const logs = [...input.logs].sort(
       (left, right): number => (left.logIndex ?? -1) - (right.logIndex ?? -1),
@@ -200,17 +200,30 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     );
 
     if (input.advance) {
-      await BaseCursor.updateOne(
-        { ...key, leaseOwner },
+      const field = input.mode === 'live' ? 'nextLiveBlock' : 'nextBlock';
+
+      const progress = await BaseCursor.updateOne(
         {
-          $set: {
-            nextBlock: (number + 1n).toString(),
-            previousBlockHash: hash,
-            lastScannedAt: new Date(),
-          },
+          ...key,
+          leaseOwner,
+          ...(input.expectedNextBlock === undefined ? {} : { [field]: input.expectedNextBlock }),
+        },
+        {
+          $set:
+            input.mode === 'live'
+              ? { nextLiveBlock: (number + 1n).toString(), lastLiveScannedAt: new Date() }
+              : {
+                  nextBlock: (number + 1n).toString(),
+                  previousBlockHash: hash,
+                  lastScannedAt: new Date(),
+                },
         },
         { session },
       );
+
+      if (progress.matchedCount !== 1) {
+        throw new Error('Base scan cursor changed before commit');
+      }
     }
 
     return events;

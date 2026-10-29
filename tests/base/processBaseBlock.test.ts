@@ -110,6 +110,25 @@ it('stores multiple trades in the same transaction under distinct log indexes', 
   );
 });
 
+it('advances only the live cursor using the expected position and leaves history unchanged', async (): Promise<void> => {
+  await processBaseBlock({
+    context,
+    number: 20n,
+    hash: event.blockHash!,
+    timestamp: 1n,
+    logs: [],
+    advance: true,
+    mode: 'live',
+    expectedNextBlock: '20',
+  });
+
+  expect(BaseCursor.updateOne).toHaveBeenLastCalledWith(
+    expect.objectContaining({ nextLiveBlock: '20', leaseOwner: 'worker-one' }),
+    { $set: { nextLiveBlock: '21', lastLiveScannedAt: expect.any(Date) } },
+    { session },
+  );
+});
+
 it('logs a newly committed trade once and stays silent on replay', async (): Promise<void> => {
   vi.mocked(LaunchTrade.updateOne)
     .mockResolvedValueOnce({ upsertedCount: 1 } as never)
