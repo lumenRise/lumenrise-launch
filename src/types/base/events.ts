@@ -11,6 +11,9 @@ interface BaseCursorRecord {
   network: 'testnet' | 'public';
   factoryAddress: string;
   nextBlock: string;
+  nextLiveBlock?: string | null;
+  historyEndBlock?: string | null;
+  lastLiveScannedAt?: Date | null;
   previousBlockHash: string | null;
   leaseUntil: Date | null;
   leaseOwner: string | null;
