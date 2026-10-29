@@ -1,4 +1,5 @@
 import env from '../../env';
+import rpcLimits from '../../constants/rpcLimits';
 import isBaseAddress from '../../utils/base/isBaseAddress';
 import type { BaseConfiguration } from '../../types/base/configuration';
 
@@ -29,9 +30,8 @@ const getBaseConfiguration = (network: 'testnet' | 'public'): BaseConfiguration 
     url.username ||
     url.password ||
     url.hash ||
-    !Number.isInteger(env.BASE_LOG_BATCH_SIZE) ||
-    env.BASE_LOG_BATCH_SIZE < 1 ||
-    env.BASE_LOG_BATCH_SIZE > 10_000
+    !Number.isSafeInteger(rpcLimits.baseLogBlockRange) ||
+    rpcLimits.baseLogBlockRange < 1
   ) {
     throw new Error('Invalid Base RPC configuration');
   }
@@ -42,7 +42,7 @@ const getBaseConfiguration = (network: 'testnet' | 'public'): BaseConfiguration 
     rpcUrl,
     factoryAddress: factory.toLowerCase() as BaseConfiguration['factoryAddress'],
     deploymentBlock: BigInt(start),
-    batchSize: BigInt(env.BASE_LOG_BATCH_SIZE),
+    batchSize: BigInt(rpcLimits.baseLogBlockRange),
   };
 };
 
