@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { decodeEventLog, toEventSelector } from 'viem';
 
+import log from '../../logger';
 import Launch from '../../models/Launch';
 import decodeBaseTrade from './decodeBaseTrade';
 import indexBaseLaunch from './indexBaseLaunch';
@@ -10,6 +11,7 @@ import refreshBaseMarket from './refreshBaseMarket';
 import tokenAbi from '../../constants/base/tokenAbi';
 import BaseCheckpoint from '../../models/BaseCheckpoint';
 import type { BaseBlockInput } from '../../types/base/launch';
+import type { BaseIndexedEvent } from '../../types/base/launch';
 
 const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
   const { context, number, hash, timestamp } = input;
@@ -30,7 +32,9 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     throw new Error('Base block changed before ingestion; retry after reconciliation');
   }
 
-  await mongoose.connection.transaction(async (session): Promise<void> => {
+  const indexed = await mongoose.connection.transaction(async (session) => {
+    const events: BaseIndexedEvent[] = [];
+
     const locked = await BaseCursor.updateOne(
       { ...key, leaseOwner, leaseUntil: { $gt: new Date() } },
       { $set: { leaseUntil: new Date(Date.now() + 300_000) } },
@@ -61,7 +65,11 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         log.address.toLowerCase() === configuration.factoryAddress &&
         log.topics[0] === toEventSelector('LaunchCreated(uint256,address,address,address,uint256)')
       ) {
-        await indexBaseLaunch(eventContext, log, timestamp);
+        const launch = await indexBaseLaunch(eventContext, log, timestamp);
+
+        if (launch) {
+          events.push({ message: 'Base new launch indexed', data: launch });
+        }
       }
     }
 
@@ -151,7 +159,7 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         assetDecimals: launch.assetDecimals!,
       });
 
-      await LaunchTrade.updateOne(
+      const result = await LaunchTrade.updateOne(
         {
           chain: 'base',
           network: trade.network,
@@ -161,6 +169,18 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         { $setOnInsert: trade },
         { upsert: true, session },
       );
+
+      if (result.upsertedCount === 1) {
+        events.push({
+          message: trade.side === 'buy' ? 'Base buy indexed' : 'Base sell indexed',
+          data: {
+            ...trade,
+            blockNumber: number.toString(),
+            assetDecimals: launch.assetDecimals,
+            pairDecimals: launch.pairDecimals,
+          },
+        });
+      }
 
       const addresses = traders.get(trade.contractId) ?? [];
 
@@ -192,7 +212,13 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         { session },
       );
     }
+
+    return events;
   });
+
+  for (const event of indexed) {
+    log.info(event.data, event.message);
+  }
 };
 
 export default processBaseBlock;

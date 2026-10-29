@@ -22,6 +22,11 @@ interface BaseEventContext extends BaseContext {
   session: ClientSession;
 }
 
+interface BaseIndexedEvent {
+  message: string;
+  data: Record<string, unknown>;
+}
+
 interface BaseLaunchRead {
   context: BaseContext;
   address: Address;
@@ -38,6 +43,7 @@ interface BaseLaunchSnapshot {
 }
 
 export type {
+  BaseIndexedEvent,
   BaseLaunchSnapshot,
   BaseWriteContext,
   BaseBlockInput,

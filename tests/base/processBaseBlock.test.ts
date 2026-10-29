@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+import log from '../../src/logger';
 import Launch from '../../src/models/Launch';
 import BaseCursor from '../../src/models/BaseCursor';
 import createBaseLog from '../helpers/createBaseLog';
@@ -11,6 +12,8 @@ import processBaseBlock from '../../src/services/base/processBaseBlock';
 import refreshBaseMarket from '../../src/services/base/refreshBaseMarket';
 
 vi.mock('../../src/services/base/refreshBaseMarket', () => ({ default: vi.fn() }));
+
+vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
 
 const event = createBaseLog();
 const session = {};
@@ -105,6 +108,52 @@ it('stores multiple trades in the same transaction under distinct log indexes', 
   expect(vi.mocked(LaunchTrade.updateOne).mock.calls.map((call) => call[0].operationIndex)).toEqual(
     [2, 5],
   );
+});
+
+it('logs a newly committed trade once and stays silent on replay', async (): Promise<void> => {
+  vi.mocked(LaunchTrade.updateOne)
+    .mockResolvedValueOnce({ upsertedCount: 1 } as never)
+    .mockResolvedValueOnce({ upsertedCount: 0 } as never);
+
+  const input = {
+    context,
+    number: 20n,
+    hash: event.blockHash!,
+    timestamp: 1n,
+    logs: [event],
+  };
+
+  await processBaseBlock(input);
+  await processBaseBlock(input);
+
+  expect(log.info).toHaveBeenCalledTimes(1);
+
+  expect(log.info).toHaveBeenCalledWith(
+    expect.objectContaining({
+      chain: 'base',
+      network: 'testnet',
+      transactionHash: event.transactionHash,
+    }),
+    'Base buy indexed',
+  );
+});
+
+it('does not log success when the database transaction fails after ingesting a trade', async (): Promise<void> => {
+  vi.mocked(LaunchTrade.updateOne).mockResolvedValue({ upsertedCount: 1 } as never);
+
+  vi.mocked(refreshBaseMarket).mockRejectedValueOnce(new Error('Market refresh failed'));
+
+  await expect(
+    processBaseBlock({
+      context,
+      number: 20n,
+      hash: event.blockHash!,
+      timestamp: 1n,
+      logs: [event],
+    }),
+  ).rejects.toThrow('Market refresh failed');
+
+  expect(log.info).not.toHaveBeenCalled();
 });
 
 it('ignores a trade emitter not indexed under the configured factory', async (): Promise<void> => {

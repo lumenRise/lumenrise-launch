@@ -14,7 +14,7 @@ const indexBaseLaunch = async (
   context: BaseEventContext,
   log: Log,
   timestamp: bigint,
-): Promise<void> => {
+): Promise<Record<string, unknown> | null> => {
   if (
     log.address.toLowerCase() !== context.configuration.factoryAddress ||
     log.blockNumber === null ||
@@ -124,7 +124,7 @@ const indexBaseLaunch = async (
     ...(image?.xAccount ? { xAccount: image.xAccount } : {}),
   };
 
-  await Launch.updateOne(
+  const result = await Launch.updateOne(
     identity,
     {
       $setOnInsert: {
@@ -170,6 +170,21 @@ const indexBaseLaunch = async (
       { session: context.session },
     );
   }
+
+  return result.upsertedCount === 1
+    ? {
+        chain: 'base',
+        network: identity.network,
+        factoryContractId: context.configuration.factoryAddress,
+        factoryIndex: Number(args.index),
+        contractId: identity.contractId,
+        symbol: metadata.symbol,
+        asset: params.asset.toLowerCase(),
+        owner,
+        blockNumber: log.blockNumber.toString(),
+        transactionHash: log.transactionHash,
+      }
+    : null;
 };
 
 export default indexBaseLaunch;
