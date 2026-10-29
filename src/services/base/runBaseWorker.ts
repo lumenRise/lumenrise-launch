@@ -9,9 +9,12 @@ import BaseCheckpoint from '../../models/BaseCheckpoint';
 import getBaseConfiguration from './getBaseConfiguration';
 
 const runBaseWorker = async (): Promise<void> => {
-  const networks = (['testnet', 'public'] as const).filter(
-    (network): boolean => getBaseConfiguration(network) !== null,
-  );
+  const networks = (
+    [
+      'testnet',
+      // 'public',
+    ] as const
+  ).filter((network): boolean => getBaseConfiguration(network) !== null);
 
   if (networks.length === 0) {
     log.info('Base is disabled; configure RPC, factory address and deployment block to enable it');
