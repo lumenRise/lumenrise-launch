@@ -1,6 +1,7 @@
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import log from '../../../src/logger';
 import type { LaunchData } from '../../../src/types/launch/model';
 import syncFactory from '../../../src/services/launch/syncFactory';
 import type { LaunchStore } from '../../../src/types/launch/store';
@@ -74,6 +75,29 @@ describe('syncFactory', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('does not announce an existing launch as newly indexed', async (): Promise<void> => {
+    const reader = {
+      launchCount: vi.fn().mockResolvedValue({ value: 1, ledger: 100 }),
+      launchAt: vi.fn().mockResolvedValue({ value: childContractId, ledger: 100 }),
+      launchConfig: vi.fn().mockResolvedValue({ value: config, ledger: 101 }),
+      launchState: vi.fn().mockResolvedValue({ value: state, ledger: 102 }),
+    } as unknown as LaunchReader;
+
+    const store = {
+      nextIndex: vi.fn().mockResolvedValue(1),
+      save: vi.fn().mockResolvedValue(false),
+      advance: vi.fn(),
+    } as unknown as LaunchStore;
+
+    vi.mocked(log.info).mockClear();
+
+    expect(await syncFactory(reader, store, configuration)).toBe(0);
+
+    expect(store.advance).toHaveBeenCalledWith(2);
+
+    expect(log.info).not.toHaveBeenCalled();
+  });
 
   it('backfills verified creation time independently of the future trading start', async () => {
     const createdAt = new Date('2026-09-01T00:00:00Z');

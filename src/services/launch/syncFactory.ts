@@ -43,6 +43,7 @@ const syncFactory = async (
     const state = await reader.launchState(contractId);
 
     let launch: LaunchData;
+    let inserted: boolean | void;
 
     try {
       launch = parseLaunchConfig({
@@ -71,7 +72,7 @@ const syncFactory = async (
         }
       }
 
-      await store.save(launch);
+      inserted = await store.save(launch);
     } catch (error) {
       if (error instanceof Error && error.name === 'LaunchNameConflict') {
         log.warn({ error, contractId }, 'Stellar skipping conflicting launch name');
@@ -87,6 +88,12 @@ const syncFactory = async (
     }
 
     await store.advance(index + 1);
+
+    if (inserted === false) {
+      index += 1;
+
+      continue;
+    }
 
     log.info(
       {
@@ -109,18 +116,6 @@ const syncFactory = async (
 
   if (reconcile) {
     await store.advance(count + 1);
-
-    log.info(
-      {
-        chain: 'stellar',
-        network: configuration.network,
-        factoryContractId: configuration.factoryContractId,
-        launchCount: count,
-        indexedCount: indexedIndexes?.size ?? 0,
-        recoveredCount: added,
-      },
-      'Stellar launch factory reconciliation completed',
-    );
   }
 
   return added;
