@@ -2,12 +2,14 @@ import { xdr, nativeToScVal, rpc, type Horizon } from '@stellar/stellar-sdk';
 
 import rpcLimits from '../../constants/rpcLimits';
 import type { LaunchCreation } from '../../types/launch/creation';
+import checkHorizonAvailability from './checkHorizonAvailability';
 import isLaunchCreation from '../../utils/launch/isLaunchCreation';
 
 const readLaunchCreation = async (
   server: rpc.Server,
   contractId: string,
   horizon?: Horizon.Server,
+  networkPassphrase?: string,
 ): Promise<LaunchCreation | null> => {
   const entry = await server.getContractData(
     contractId,
@@ -25,6 +27,10 @@ const readLaunchCreation = async (
   if (ledger < health.oldestLedger) {
     if (!horizon) {
       return null;
+    }
+
+    if (networkPassphrase !== undefined) {
+      await checkHorizonAvailability(horizon.serverURL.toString(), networkPassphrase);
     }
 
     let page = await horizon
