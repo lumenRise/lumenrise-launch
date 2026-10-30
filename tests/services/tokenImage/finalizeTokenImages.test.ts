@@ -4,7 +4,7 @@ import Launch from '../../../src/models/Launch';
 import TokenImage from '../../../src/models/TokenImage';
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 
-vi.mock('../../../src/logger', () => ({ default: { warn: vi.fn() } }));
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn(), warn: vi.fn() } }));
 
 vi.mock('../../../src/models/Launch', () => ({
   default: { findOne: vi.fn(), updateOne: vi.fn() },

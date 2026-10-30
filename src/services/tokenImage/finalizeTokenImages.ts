@@ -48,7 +48,7 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
         );
       }
 
-      await TokenImage.updateOne(
+      const updated = await TokenImage.updateOne(
         { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
         {
           $set: {
@@ -61,6 +61,18 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
           },
         },
       );
+
+      if (updated?.modifiedCount === 1) {
+        log.info(
+          {
+            chain: 'stellar',
+            network: configuration.network,
+            imageId: image._id,
+            contractId: launch.contractId,
+          },
+          'Stellar token image finalized',
+        );
+      }
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
         log.warn(
