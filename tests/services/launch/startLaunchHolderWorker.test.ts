@@ -5,7 +5,7 @@ import { startPolledQueueWorker } from '../../../src/workers/polledQueue';
 import startLaunchHolderWorker from '../../../src/services/launch/startLaunchHolderWorker';
 
 vi.mock('amqplib', () => ({ default: { connect: vi.fn() } }));
-vi.mock('../../../src/logger', () => ({ default: { warn: vi.fn() } }));
+vi.mock('../../../src/logger', () => ({ default: { info: vi.fn(), warn: vi.fn() } }));
 vi.mock('../../../src/workers/polledQueue', () => ({ startPolledQueueWorker: vi.fn() }));
 vi.mock('../../../src/workers/processLaunchHolderJob', () => ({ default: vi.fn() }));
 
@@ -35,7 +35,10 @@ describe('launch connection to the shared broker', () => {
     expect(amqp.connect).toHaveBeenCalledWith('amqp://shared-broker', { timeout: 5000 });
     expect(startPolledQueueWorker).toHaveBeenCalledOnce();
     expect(startPolledQueueWorker).toHaveBeenCalledWith(
-      expect.objectContaining({ queue: 'lumenrise.launch.holder-refresh.v2.testnet', broker: null }),
+      expect.objectContaining({
+        queue: 'lumenrise.launch.holder-refresh.v2.testnet',
+        broker: null,
+      }),
     );
     expect(baseWorker.attachBroker).toHaveBeenCalledWith(broker);
     await worker.stop();
