@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import log from '../../../src/logger';
 import type { LaunchReader } from '../../../src/types/launch/reader';
 import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
@@ -54,6 +55,27 @@ describe('contract price polling lifecycle', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('keeps unchanged state polling silent', async (): Promise<void> => {
+    store.dueStateTargets.mockResolvedValue([
+      { ...target, state: { ...state, sold: '100', quote_reserve: '100', team_claimed: '0' } },
+    ]);
+
+    await refresh();
+
+    expect(log.info).not.toHaveBeenCalled();
+  });
+
+  it('describes a committed state change with chain and network', async (): Promise<void> => {
+    store.dueStateTargets.mockResolvedValue([{ ...target, sold: '0' }]);
+
+    await refresh();
+
+    expect(log.info).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ chain: 'stellar', network: 'testnet', contractId: 'curve' }),
+      'Stellar launch state changed',
+    );
+  });
 
   it('continues polling a non-graduated curve without an expiry', async () => {
     store.dueStateTargets.mockResolvedValue([{ ...target, endsAt: null }]);

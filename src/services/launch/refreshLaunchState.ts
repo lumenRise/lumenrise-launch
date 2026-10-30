@@ -52,20 +52,23 @@ const refreshLaunchState = async (
         continue;
       }
 
-      log.info(
-        {
-          chain: 'stellar' as const,
-          network: reader.network,
-          contractId: target.contractId,
-          ledger,
-          sold: state.sold,
-          graduated: state.graduated,
-          nextStatePollAt: nextPollAt,
-        },
-        nextPollAt === null
-          ? 'Stellar launch polling stopped'
-          : 'Stellar launch state refresh completed',
+      const previousState = target.state ?? { sold: target.sold, graduated: target.graduated };
+      const changed = Object.keys(previousState).some(
+        (key: string): boolean => previousState[key] !== state[key],
       );
+
+      if (changed) {
+        log.info(
+          {
+            chain: 'stellar',
+            network: reader.network,
+            contractId: target.contractId,
+            ledger,
+            state,
+          },
+          'Stellar launch state changed',
+        );
+      }
 
       refreshed += 1;
     } catch (error) {
