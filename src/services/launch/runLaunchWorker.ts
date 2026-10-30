@@ -16,7 +16,7 @@ const runLaunchWorker = async (): Promise<void> => {
   const baseNetworks = getBaseNetworks();
 
   if (configurations.length === 0 && baseNetworks.length === 0) {
-    log.info('No launch networks configured; configure a Stellar or Base factory');
+    log.warn('No launch networks configured; configure a Stellar or Base factory');
 
     return;
   }
@@ -31,6 +31,8 @@ const runLaunchWorker = async (): Promise<void> => {
     await connectDatabase(configurations[0] ?? { dbUri: env.DB_URI, dbName: env.DB_NAME });
 
     await createLaunchIndexes();
+
+    log.info('Launch service started');
 
     const workers = configurations.map(async (configuration): Promise<void> => {
       try {
@@ -70,9 +72,9 @@ const runLaunchWorker = async (): Promise<void> => {
     process.removeListener('SIGTERM', stop);
 
     await disconnectDatabase();
-  }
 
-  log.info('Launch network workers stopped');
+    log.info('Launch service stopped');
+  }
 };
 
 export default runLaunchWorker;
