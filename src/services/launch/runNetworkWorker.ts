@@ -6,12 +6,12 @@ import createLaunchStore from './createLaunchStore';
 import refreshLaunchState from './refreshLaunchState';
 import createScheduledTask from './createScheduledTask';
 import type { Configuration } from '../../types/configuration';
-import createLaunchReader from '../stellar/createLaunchReader';
 import startLaunchHolderWorker from './startLaunchHolderWorker';
 import syncAssetIdentities from '../stellar/syncAssetIdentities';
 import finalizeTokenImages from '../tokenImage/finalizeTokenImages';
 import type { ScheduledTask } from '../../types/launch/scheduledTask';
 import markTokenImagesForCleanup from '../tokenImage/markTokenImagesForCleanup';
+import createLaunchReaderWithRetry from '../stellar/createLaunchReaderWithRetry';
 
 const runNetworkWorker = async (
   configuration: Configuration,
@@ -22,7 +22,12 @@ const runNetworkWorker = async (
   let holderWorker: { stop: () => Promise<void> } | null = null;
 
   try {
-    const reader = await createLaunchReader(configuration);
+    const reader = await createLaunchReaderWithRetry(configuration, signal);
+
+    if (!reader) {
+      return;
+    }
+
     const store = createLaunchStore(configuration);
 
     holderWorker = await startLaunchHolderWorker(reader, configuration);
@@ -72,11 +77,6 @@ const runNetworkWorker = async (
           imageTask.request();
 
           assetTask.request();
-
-          log.info(
-            { count: added, factoryContractId: configuration.factoryContractId },
-            'Stellar launches indexed',
-          );
         }
       },
     });
@@ -97,12 +97,21 @@ const runNetworkWorker = async (
       try {
         await refreshLaunchState(reader, store, new Date(), (error, contractId) => {
           log.warn(
-            { err: error, network: reader.network, contractId, retryDelayMs: 30_000 },
+            {
+              err: error,
+              chain: 'stellar',
+              network: reader.network,
+              contractId,
+              retryDelayMs: 30_000,
+            },
             'Stellar launch state refresh failed',
           );
         });
       } catch (error) {
-        log.error({ err: error }, 'Stellar launch state polling failed');
+        log.error(
+          { err: error, chain: 'stellar', network: reader.network },
+          'Stellar launch state polling failed',
+        );
       }
 
       try {

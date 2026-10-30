@@ -160,7 +160,7 @@ describe('launch worker timer coordination', () => {
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });
 
-  it('logs the failed network and error and disconnects after startup failure', async (): Promise<void> => {
+  it('retries an initial Stellar RPC failure without disconnecting the shared service', async (): Promise<void> => {
     const error = new Error('RPC unavailable');
 
     vi.mocked(loadConfiguration).mockReturnValue({
@@ -170,12 +170,25 @@ describe('launch worker timer coordination', () => {
 
     vi.mocked(createLaunchReader).mockRejectedValueOnce(error);
 
-    await expect(runLaunchWorker()).rejects.toBe(error);
+    const running = runLaunchWorker();
 
-    expect(log.error).toHaveBeenCalledWith(
-      { err: error, network: 'testnet' },
-      'Launch network worker failed',
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(disconnectDatabase).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(createLaunchReader).toHaveBeenCalledTimes(2);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error, chain: 'stellar', network: 'testnet' }),
+      expect.stringContaining('other networks continue'),
     );
+
+    process.emit('SIGTERM');
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await running;
 
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });

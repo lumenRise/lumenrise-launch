@@ -15,13 +15,18 @@ const createLaunchReader = async (
   });
 
   const horizon = new Horizon.Server(configuration.horizonUrl);
-  await server.getNetwork();
+  const remote = await server.getNetwork();
+
+  if (remote.passphrase !== configuration.networkPassphrase) {
+    throw new Error('Stellar launch RPC network mismatch');
+  }
 
   const getSource = () => new Account(contract.NULL_ACCOUNT, '0');
 
   return {
     network: configuration.network,
-    launchCreation: async (contractId: string) => readLaunchCreation(server, contractId, horizon),
+    launchCreation: async (contractId: string) =>
+      readLaunchCreation(server, contractId, horizon, configuration.networkPassphrase),
     tokenBalance: async (asset, address) => {
       const read = await readContract(
         server,
