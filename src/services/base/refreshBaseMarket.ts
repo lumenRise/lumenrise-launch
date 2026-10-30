@@ -25,7 +25,7 @@ const refreshBaseMarket = async (
   const read = await readBaseLaunch({ context, address: contractId as Address, blockNumber });
   const observedAt = new Date(Number(timestamp) * 1000);
 
-  await Launch.updateOne(
+  const updated = await Launch.updateOne(
     { ...identity, ...(rewind ? {} : { stateAsOfLedger: { $lte: Number(blockNumber) } }) },
     {
       $set: {
@@ -37,6 +37,17 @@ const refreshBaseMarket = async (
     },
     { session: context.session },
   );
+
+  const stateChanged = Object.keys(read.state).some(
+    (key: string): boolean => launch.state[key] !== read.state[key],
+  );
+
+  if (updated?.matchedCount === 1 && stateChanged) {
+    context.events?.push({
+      message: 'Base launch state changed',
+      data: { ...identity, ledger: Number(blockNumber), state: read.state },
+    });
+  }
 
   await LaunchPriceSample.updateOne(
     { ...identity, observationKey: blockNumber.toString() },
@@ -90,6 +101,13 @@ const refreshBaseMarket = async (
       },
       { upsert: true, session: context.session },
     );
+
+    if (!existing || existing.balance !== balance.toString()) {
+      context.events?.push({
+        message: 'Base holder balance changed',
+        data: { ...key, balance: balance.toString(), ledger: Number(blockNumber) },
+      });
+    }
   }
 };
 
