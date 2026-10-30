@@ -7,6 +7,7 @@ interface StateTarget {
   endsAt: string | null;
   graduated: boolean;
   sold?: string;
+  state?: Record<string, unknown>;
 }
 
 interface ClaimedStateTarget extends StateTarget {
@@ -16,7 +17,7 @@ interface ClaimedStateTarget extends StateTarget {
 interface LaunchStore {
   nextIndex(): Promise<number>;
   indexedIndexes(count: number): Promise<number[]>;
-  save(launch: LaunchData): Promise<void>;
+  save(launch: LaunchData): Promise<boolean | void>;
   advance(nextIndex: number): Promise<void>;
   dueStateTargets(now: Date, limit: number): Promise<ClaimedStateTarget[]>;
   refreshState(

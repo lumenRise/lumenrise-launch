@@ -5,12 +5,14 @@ import type { Configuration } from '../../types/configuration';
 
 const finalizeTokenImages = async (configuration: Configuration): Promise<void> => {
   const pending = await TokenImage.find({
+    chain: 'stellar' as const,
     network: configuration.network,
     status: { $in: ['pending', 'cleanup_ready'] },
   }).lean();
 
   for (const image of pending) {
     const launch = await Launch.findOne({
+      chain: 'stellar' as const,
       network: configuration.network,
       owner: image.ownerAddress,
       'metadata.logo': image.publicUrl,
@@ -37,12 +39,16 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
 
       if (Object.keys(links).length > 0) {
         await Launch.updateOne(
-          { network: configuration.network, contractId: launch.contractId },
+          {
+            chain: 'stellar' as const,
+            network: configuration.network,
+            contractId: launch.contractId,
+          },
           { $set: links },
         );
       }
 
-      await TokenImage.updateOne(
+      const updated = await TokenImage.updateOne(
         { _id: image._id, status: { $in: ['pending', 'cleanup_ready'] } },
         {
           $set: {
@@ -55,14 +61,28 @@ const finalizeTokenImages = async (configuration: Configuration): Promise<void> 
           },
         },
       );
+
+      if (updated?.modifiedCount === 1) {
+        log.info(
+          {
+            chain: 'stellar',
+            network: configuration.network,
+            imageId: image._id,
+            contractId: launch.contractId,
+          },
+          'Stellar token image finalized',
+        );
+      }
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
         log.warn(
           { imageId: image._id, assetContractId: launch.asset },
           'Token already has a linked image',
         );
+
         continue;
       }
+
       throw error;
     }
   }

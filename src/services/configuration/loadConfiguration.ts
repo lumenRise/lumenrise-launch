@@ -1,6 +1,6 @@
 import env from '../../env';
-import type { Configuration } from '../../types/configuration';
 import getNetworkConfig from '../network/getNetworkConfig';
+import type { Configuration } from '../../types/configuration';
 import type { StellarNetwork } from '../../types/network/configuration';
 import validateNetworkConfiguration from '../network/validateNetworkConfiguration';
 

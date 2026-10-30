@@ -23,7 +23,12 @@ const processLaunchHolderJob = async (
   };
 
   try {
-    const identity = { network: job.network, contractId: job.contractId };
+    const identity = {
+      chain: 'stellar' as const,
+      network: job.network,
+      contractId: job.contractId,
+    };
+
     const launch = await Launch.findOne(identity).lean();
 
     if (!launch || launch.asset !== job.asset) {
@@ -35,11 +40,6 @@ const processLaunchHolderJob = async (
     await LaunchHolderRefreshJob.updateOne(owner, {
       $set: { status: 'completed', leaseUntil: null, lastError: null },
     });
-
-    log.debug(
-      { ...identity, jobId: job._id, asset: job.asset, address: job.address },
-      'Launch holder refresh completed',
-    );
   } catch (error) {
     const retryDelay = Math.min(300000, 1000 * 2 ** Math.min(job.attempts, 8));
 
@@ -55,6 +55,7 @@ const processLaunchHolderJob = async (
     log.warn(
       {
         err: error,
+        chain: 'stellar',
         jobId: job._id,
         network: job.network,
         contractId: job.contractId,
@@ -63,7 +64,7 @@ const processLaunchHolderJob = async (
         attempts: job.attempts,
         retryDelayMs: retryDelay,
       },
-      'Holder refresh deferred',
+      'Stellar holder balance refresh failed; retry scheduled',
     );
   }
 };

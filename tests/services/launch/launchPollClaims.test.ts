@@ -5,7 +5,7 @@ import type { Configuration } from '../../../src/types/configuration';
 import createLaunchStore from '../../../src/services/launch/createLaunchStore';
 
 vi.mock('../../../src/models/Launch', () => ({
-  default: { findOneAndUpdate: vi.fn(), updateOne: vi.fn(), exists: vi.fn() },
+  default: { findOneAndUpdate: vi.fn(), updateOne: vi.fn(), exists: vi.fn(), distinct: vi.fn() },
 }));
 
 const now = new Date('2026-10-17T00:00:00Z');
@@ -32,7 +32,9 @@ let scheduledAt: Date | null | undefined;
 describe('exclusive launch polling and trade schedule ownership', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+
     vi.useFakeTimers();
+
     vi.setSystemTime(now);
 
     scheduledAt = new Date(now.getTime() - 1);
@@ -73,6 +75,21 @@ describe('exclusive launch polling and trade schedule ownership', () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it('recognizes indexed launches even when their creation date is unavailable', async () => {
+    const store = createLaunchStore(configuration);
+
+    vi.mocked(Launch.distinct).mockResolvedValue([5]);
+
+    expect(await store.indexedIndexes(8)).toEqual([5]);
+
+    expect(Launch.distinct).toHaveBeenCalledWith('factoryIndex', {
+      chain: 'stellar',
+      network: 'testnet',
+      factoryContractId: 'factory',
+      factoryIndex: { $gte: 1, $lte: 8 },
+    });
+  });
+
   it('allows only one worker to claim a due launch and recovers an abandoned claim', async () => {
     const first = createLaunchStore(configuration);
     const second = createLaunchStore(configuration);
@@ -83,10 +100,12 @@ describe('exclusive launch polling and trade schedule ownership', () => {
     ]);
 
     expect(firstTargets).toHaveLength(1);
+
     expect(secondTargets).toHaveLength(0);
 
     expect(Launch.findOneAndUpdate).toHaveBeenCalledWith(
       {
+        chain: 'stellar',
         network: 'testnet',
         factoryContractId: 'factory',
         $or: [{ nextStatePollAt: { $lte: now } }, { nextStatePollAt: { $exists: false } }],
@@ -116,6 +135,7 @@ describe('exclusive launch polling and trade schedule ownership', () => {
       scheduledAt = apiDeadline;
 
       await store.refreshState(5, { sold: '100' }, 100, new Date(now.getTime() + 910_000), claim);
+
       await store.deferStateTarget(5, new Date(now.getTime() + 30_000), claim);
 
       expect(scheduledAt).toEqual(apiDeadline);
@@ -123,6 +143,7 @@ describe('exclusive launch polling and trade schedule ownership', () => {
       expect(Launch.updateOne).toHaveBeenNthCalledWith(
         1,
         {
+          chain: 'stellar',
           network: 'testnet',
           factoryContractId: 'factory',
           factoryIndex: 5,
@@ -142,6 +163,7 @@ describe('exclusive launch polling and trade schedule ownership', () => {
     await store.refreshState(5, { sold: '100' }, 100, next, targets[0]!.claimedUntil);
 
     expect(scheduledAt).toEqual(next);
+
     expect(await store.dueStateTargets(now, 2)).toHaveLength(0);
   });
 

@@ -10,6 +10,12 @@ import syncAssetIdentities from '../../../src/services/stellar/syncAssetIdentiti
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 import { loadConfiguration } from '../../../src/services/configuration/loadConfiguration';
 
+vi.mock('../../../src/env', () => ({
+  default: { DB_URI: 'mongodb://localhost', DB_NAME: 'test' },
+}));
+
+vi.mock('../../../src/services/base/getBaseNetworks', () => ({ default: (): [] => [] }));
+
 vi.mock('node:timers/promises', () => ({
   setTimeout: (milliseconds: number): Promise<void> =>
     new Promise((resolve) => {
@@ -18,40 +24,62 @@ vi.mock('node:timers/promises', () => ({
 }));
 
 vi.mock('../../../src/services/network/getNetworkConfig', () => ({
-  default: (network: string) => ({ factoryContractId: `${network}-factory` }),
+  default: (network: string) => ({
+    factoryContractId: network === 'testnet' ? 'testnet-factory' : '',
+  }),
 }));
 
 vi.mock('../../../src/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
 vi.mock('../../../src/db', () => ({ connectDatabase: vi.fn(), disconnectDatabase: vi.fn() }));
+
 vi.mock('../../../src/services/configuration/loadConfiguration', () => ({
   loadConfiguration: vi.fn(),
 }));
+
 vi.mock('../../../src/services/launch/createLaunchStore', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/launch/createLaunchIndexes', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/stellar/createLaunchReader', () => ({
   default: vi.fn().mockResolvedValue({ network: 'testnet' }),
 }));
+
 vi.mock('../../../src/services/launch/startLaunchHolderWorker', () => ({
   default: vi.fn().mockResolvedValue({ stop: vi.fn() }),
 }));
+
 vi.mock('../../../src/services/launch/syncFactory', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/launch/refreshLaunchState', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/tokenImage/finalizeTokenImages', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/tokenImage/markTokenImagesForCleanup', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/stellar/syncAssetIdentities', () => ({ default: vi.fn() }));
 
 describe('launch worker timer coordination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
     vi.useFakeTimers();
+
     vi.setSystemTime(new Date('2026-10-17T00:00:00Z'));
 
-    vi.mocked(loadConfiguration).mockReturnValue({ network: 'testnet', pollIntervalMs: 5000 } as never);
+    vi.mocked(loadConfiguration).mockReturnValue({
+      network: 'testnet',
+      pollIntervalMs: 5000,
+    } as never);
+
     vi.mocked(syncFactory).mockResolvedValue(0);
+
     vi.mocked(refreshLaunchState).mockResolvedValue(0);
+
     vi.mocked(finalizeTokenImages).mockResolvedValue(undefined);
+
     vi.mocked(syncAssetIdentities).mockResolvedValue(0);
   });
 
@@ -74,11 +102,17 @@ describe('launch worker timer coordination', () => {
     await vi.advanceTimersByTimeAsync(20_000);
 
     expect(connectDatabase).toHaveBeenCalledOnce();
+
     expect(loadConfiguration).toHaveBeenCalledOnce();
+
     expect(vi.mocked(loadConfiguration).mock.calls[0]?.[0]).toBe('testnet');
+
     expect(createLaunchReader).toHaveBeenCalledOnce();
+
     expect(syncAssetIdentities).toHaveBeenCalledOnce();
+
     expect(finalizeTokenImages).toHaveBeenCalledOnce();
+
     expect(refreshLaunchState.mock.calls.length).toBeGreaterThanOrEqual(4);
 
     process.emit('SIGTERM');
@@ -108,33 +142,53 @@ describe('launch worker timer coordination', () => {
     await vi.advanceTimersByTimeAsync(29_999);
 
     expect(syncFactory).toHaveBeenCalledTimes(1);
+
     expect(refreshLaunchState.mock.calls.length).toBeGreaterThanOrEqual(5);
 
     await vi.advanceTimersByTimeAsync(1);
 
     expect(syncFactory).toHaveBeenCalledTimes(2);
+
     expect(syncFactory.mock.calls.every((call) => call[3] === true)).toBe(true);
 
     process.emit('SIGTERM');
 
     await vi.advanceTimersByTimeAsync(5000);
+
     await running;
 
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });
 
-  it('logs the failed network and error and disconnects after startup failure', async (): Promise<void> => {
+  it('retries an initial Stellar RPC failure without disconnecting the shared service', async (): Promise<void> => {
     const error = new Error('RPC unavailable');
 
-    vi.mocked(loadConfiguration).mockReturnValue({ network: 'testnet', pollIntervalMs: 5000 } as never);
+    vi.mocked(loadConfiguration).mockReturnValue({
+      network: 'testnet',
+      pollIntervalMs: 5000,
+    } as never);
+
     vi.mocked(createLaunchReader).mockRejectedValueOnce(error);
 
-    await expect(runLaunchWorker()).rejects.toBe(error);
+    const running = runLaunchWorker();
 
-    expect(log.error).toHaveBeenCalledWith(
-      { err: error, network: 'testnet' },
-      'Launch network worker failed',
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(disconnectDatabase).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(createLaunchReader).toHaveBeenCalledTimes(2);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error, chain: 'stellar', network: 'testnet' }),
+      expect.stringContaining('other networks continue'),
     );
+
+    process.emit('SIGTERM');
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await running;
 
     expect(disconnectDatabase).toHaveBeenCalledOnce();
   });

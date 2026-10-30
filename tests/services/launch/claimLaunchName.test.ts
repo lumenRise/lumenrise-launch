@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Launch from '../../../src/models/Launch';
@@ -7,7 +8,9 @@ import type { LaunchData } from '../../../src/types/launch/model';
 import claimLaunchName from '../../../src/services/launch/claimLaunchName';
 
 vi.mock('../../../src/models/Launch', () => ({ default: { findOne: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchName', () => ({ default: { findOneAndUpdate: vi.fn() } }));
+
 vi.mock('../../../src/models/TokenImage', () => ({ default: { findOne: vi.fn() } }));
 
 const launch = {
@@ -25,7 +28,10 @@ describe('launch name claims', () => {
       select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
     } as never);
 
-    vi.mocked(TokenImage.findOne).mockReturnValue({ lean: vi.fn().mockResolvedValue(null) } as never);
+    vi.mocked(TokenImage.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue(null),
+    } as never);
+
     vi.mocked(LaunchName.findOneAndUpdate).mockResolvedValue({} as never);
   });
 
@@ -34,6 +40,7 @@ describe('launch name claims', () => {
 
     expect(LaunchName.findOneAndUpdate).toHaveBeenCalledWith(
       {
+        chain: 'stellar',
         network: 'testnet',
         slug: 'blue-man',
         ownerAddress: 'owner',
@@ -48,10 +55,15 @@ describe('launch name claims', () => {
     );
   });
 
-  it('marks duplicate names as conflicts without hiding infrastructure failures', async () => {
+  it('suffixes direct on-chain collisions without hiding infrastructure failures', async () => {
     vi.mocked(LaunchName.findOneAndUpdate).mockRejectedValueOnce({ code: 11000 });
 
-    await expect(claimLaunchName(launch)).rejects.toMatchObject({ name: 'LaunchNameConflict' });
+    const digest = createHash('sha256')
+      .update('stellar:testnet:contract-one')
+      .digest('hex')
+      .slice(0, 12);
+
+    await expect(claimLaunchName(launch)).resolves.toBe(`blue-man-${digest}`);
 
     const unavailable = new Error('Database unavailable');
 
@@ -64,7 +76,9 @@ describe('launch name claims', () => {
     { slug: 'other-project', status: 'pending' },
     { slug: 'blue-man', status: 'expired' },
   ])('rejects a mismatched or released prelaunch: %j', async (image) => {
-    vi.mocked(TokenImage.findOne).mockReturnValue({ lean: vi.fn().mockResolvedValue(image) } as never);
+    vi.mocked(TokenImage.findOne).mockReturnValue({
+      lean: vi.fn().mockResolvedValue(image),
+    } as never);
 
     await expect(claimLaunchName(launch)).rejects.toMatchObject({ name: 'LaunchNameConflict' });
 
@@ -83,13 +97,34 @@ describe('launch name claims', () => {
 
   it('preserves a migrated legacy slug during reconciliation', async () => {
     vi.mocked(Launch.findOne).mockReturnValue({
-      select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ slug: 'blue-man-legacy' }) }),
+      select: vi
+        .fn()
+        .mockReturnValue({ lean: vi.fn().mockResolvedValue({ slug: 'blue-man-legacy' }) }),
     } as never);
 
     await expect(claimLaunchName(launch)).resolves.toBe('blue-man-legacy');
 
     expect(LaunchName.findOneAndUpdate).not.toHaveBeenCalled();
+
     expect(TokenImage.findOne).not.toHaveBeenCalled();
   });
+});
 
+it('keeps API prelaunch reservations strict when a claim collides', async (): Promise<void> => {
+  vi.clearAllMocks();
+
+  vi.mocked(Launch.findOne).mockReturnValue({
+    select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
+  } as never);
+
+  vi.mocked(LaunchName.findOneAndUpdate).mockReset();
+  vi.mocked(TokenImage.findOne).mockReturnValue({
+    lean: vi.fn().mockResolvedValue({ slug: 'blue-man', status: 'pending' }),
+  } as never);
+
+  vi.mocked(LaunchName.findOneAndUpdate).mockRejectedValueOnce({ code: 11000 });
+
+  await expect(claimLaunchName(launch)).rejects.toMatchObject({ name: 'LaunchNameConflict' });
+
+  expect(LaunchName.findOneAndUpdate).toHaveBeenCalledTimes(1);
 });

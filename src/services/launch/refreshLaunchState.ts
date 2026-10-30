@@ -18,7 +18,6 @@ const refreshLaunchState = async (
     try {
       const { value, ledger } = await reader.launchState(target.contractId);
       const state = parseLaunchState(value);
-
       const seconds = BigInt(Math.floor(Date.now() / 1000));
 
       if (seconds >= BigInt(target.startsAt)) {
@@ -29,7 +28,7 @@ const refreshLaunchState = async (
         }
 
         await recordLaunchPrice(
-          { network: reader.network, contractId: target.contractId },
+          { chain: 'stellar' as const, network: reader.network, contractId: target.contractId },
           priceRead,
         );
       }
@@ -53,21 +52,28 @@ const refreshLaunchState = async (
         continue;
       }
 
-      log.info(
-        {
-          network: reader.network,
-          contractId: target.contractId,
-          ledger,
-          sold: state.sold,
-          graduated: state.graduated,
-          nextStatePollAt: nextPollAt,
-        },
-        nextPollAt === null ? 'Launch polling stopped' : 'Launch state refresh completed',
+      const previousState = target.state ?? { sold: target.sold, graduated: target.graduated };
+      const changed = Object.keys(previousState).some(
+        (key: string): boolean => previousState[key] !== state[key],
       );
+
+      if (changed) {
+        log.info(
+          {
+            chain: 'stellar',
+            network: reader.network,
+            contractId: target.contractId,
+            ledger,
+            state,
+          },
+          'Stellar launch state changed',
+        );
+      }
 
       refreshed += 1;
     } catch (error) {
       onError?.(error, target.contractId);
+
       try {
         await store.deferStateTarget(
           target.factoryIndex,

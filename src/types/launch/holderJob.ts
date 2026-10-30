@@ -1,6 +1,9 @@
 import type { HydratedDocument, Types } from 'mongoose';
 
+import type { Chain } from '../network/chain';
+
 interface LaunchHolderJobRecord {
+  chain?: Chain;
   network: 'testnet' | 'public';
   contractId: string;
   asset: string;

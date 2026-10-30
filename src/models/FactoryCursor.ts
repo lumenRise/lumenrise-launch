@@ -4,6 +4,13 @@ import type { FactoryCursorRecord } from '../types/launch/factoryCursor';
 
 const factoryCursorSchema = new Schema<FactoryCursorRecord>(
   {
+    chain: {
+      type: String,
+      enum: ['stellar', 'base'],
+      required: true,
+      default: 'stellar',
+      immutable: true,
+    },
     network: {
       type: String,
       enum: ['testnet', 'public'],
@@ -18,8 +25,8 @@ const factoryCursorSchema = new Schema<FactoryCursorRecord>(
 );
 
 factoryCursorSchema.index(
-  { network: 1, factoryContractId: 1 },
-  { unique: true, name: 'launch_factory_cursors_unique' },
+  { chain: 1, network: 1, factoryContractId: 1 },
+  { unique: true, name: 'launch_factory_cursors_unique_chain' },
 );
 
 const FactoryCursor = model<FactoryCursorRecord>('FactoryCursor', factoryCursorSchema);

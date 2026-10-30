@@ -43,6 +43,7 @@ const syncFactory = async (
     const state = await reader.launchState(contractId);
 
     let launch: LaunchData;
+    let inserted: boolean | void;
 
     try {
       launch = parseLaunchConfig({
@@ -64,14 +65,17 @@ const syncFactory = async (
             Object.assign(launch, creation);
           }
         } catch (error) {
-          log.warn({ error, contractId }, 'Launch creation lookup unavailable; keeping date unknown');
+          log.warn(
+            { error, contractId },
+            'Stellar launch creation lookup unavailable; keeping date unknown',
+          );
         }
       }
 
-      await store.save(launch);
+      inserted = await store.save(launch);
     } catch (error) {
       if (error instanceof Error && error.name === 'LaunchNameConflict') {
-        log.warn({ error, contractId }, 'Skipping conflicting launch name');
+        log.warn({ error, contractId }, 'Stellar skipping conflicting launch name');
 
         await store.advance(index + 1);
 
@@ -85,8 +89,15 @@ const syncFactory = async (
 
     await store.advance(index + 1);
 
+    if (inserted === false) {
+      index += 1;
+
+      continue;
+    }
+
     log.info(
       {
+        chain: 'stellar',
         network: launch.network,
         factoryContractId: launch.factoryContractId,
         factoryIndex: launch.factoryIndex,
@@ -96,7 +107,7 @@ const syncFactory = async (
         asset: launch.asset,
         owner: launch.owner,
       },
-      'New launch indexed',
+      'Stellar new launch indexed',
     );
 
     index += 1;
@@ -105,17 +116,6 @@ const syncFactory = async (
 
   if (reconcile) {
     await store.advance(count + 1);
-
-    log.info(
-      {
-        network: configuration.network,
-        factoryContractId: configuration.factoryContractId,
-        launchCount: count,
-        indexedCount: indexedIndexes?.size ?? 0,
-        recoveredCount: added,
-      },
-      'Launch factory reconciliation completed',
-    );
   }
 
   return added;

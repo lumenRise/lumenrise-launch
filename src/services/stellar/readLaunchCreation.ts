@@ -1,12 +1,15 @@
 import { xdr, nativeToScVal, rpc, type Horizon } from '@stellar/stellar-sdk';
 
+import rpcLimits from '../../constants/rpcLimits';
 import type { LaunchCreation } from '../../types/launch/creation';
+import checkHorizonAvailability from './checkHorizonAvailability';
 import isLaunchCreation from '../../utils/launch/isLaunchCreation';
 
 const readLaunchCreation = async (
   server: rpc.Server,
   contractId: string,
   horizon?: Horizon.Server,
+  networkPassphrase?: string,
 ): Promise<LaunchCreation | null> => {
   const entry = await server.getContractData(
     contractId,
@@ -26,7 +29,16 @@ const readLaunchCreation = async (
       return null;
     }
 
-    let page = await horizon.transactions().forLedger(ledger).limit(200).order('asc').call();
+    if (networkPassphrase !== undefined) {
+      await checkHorizonAvailability(horizon.serverURL.toString(), networkPassphrase);
+    }
+
+    let page = await horizon
+      .transactions()
+      .forLedger(ledger)
+      .limit(rpcLimits.stellarTransactionPageSize)
+      .order('asc')
+      .call();
 
     while (true) {
       for (const transaction of page.records) {
@@ -50,7 +62,7 @@ const readLaunchCreation = async (
         }
       }
 
-      if (page.records.length < 200) {
+      if (page.records.length < rpcLimits.stellarTransactionPageSize) {
         return null;
       }
 
@@ -67,8 +79,8 @@ const readLaunchCreation = async (
   while (true) {
     const page = await server.getTransactions(
       cursor
-        ? { pagination: { cursor, limit: 200 } }
-        : { startLedger: ledger, pagination: { limit: 200 } },
+        ? { pagination: { cursor, limit: rpcLimits.stellarTransactionPageSize } }
+        : { startLedger: ledger, pagination: { limit: rpcLimits.stellarTransactionPageSize } },
     );
 
     for (const transaction of page.transactions) {
@@ -85,7 +97,7 @@ const readLaunchCreation = async (
       }
     }
 
-    if (page.transactions.length < 200 || page.cursor === cursor) {
+    if (page.transactions.length < rpcLimits.stellarTransactionPageSize || page.cursor === cursor) {
       return null;
     }
 

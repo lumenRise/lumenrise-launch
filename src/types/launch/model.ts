@@ -1,12 +1,18 @@
+import type { Chain } from '../network/chain';
+
 interface LaunchData {
+  chain?: Chain;
   network: 'testnet' | 'public';
   factoryContractId: string;
+  prelaunchId?: string | null;
   factoryIndex: number;
   contractId: string;
   slug: string;
   owner: string;
   asset: string;
   pair: string;
+  assetDecimals?: number;
+  pairDecimals?: number;
   metadata: {
     name: string;
     description: string;

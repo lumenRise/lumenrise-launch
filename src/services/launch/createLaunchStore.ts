@@ -8,6 +8,7 @@ import type { ClaimedStateTarget } from '../../types/launch/store';
 
 const createLaunchStore = (configuration: Configuration): LaunchStore => {
   const identity = {
+    chain: 'stellar' as const,
     network: configuration.network,
     factoryContractId: configuration.factoryContractId,
   };
@@ -23,7 +24,6 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       Launch.distinct('factoryIndex', {
         ...identity,
         factoryIndex: { $gte: 1, $lte: count },
-        createdAt: { $type: 'date' },
       }),
 
     save: async (launch) => {
@@ -31,7 +31,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
       const slug = await claimLaunchName(launch);
       const metadata = await resolveLaunchMetadata(launch);
 
-      await Launch.updateOne(
+      const result = await Launch.updateOne(
         {
           ...identity,
           factoryIndex: launch.factoryIndex,
@@ -43,6 +43,8 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
         },
         { upsert: true },
       );
+
+      return result.upsertedCount === 1;
     },
 
     advance: async (nextIndex) => {
@@ -67,9 +69,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           { $set: { nextStatePollAt: claimedUntil } },
           { sort: { nextStatePollAt: 1, factoryIndex: 1 }, returnDocument: 'after' },
         )
-          .select(
-            'factoryIndex contractId config.params.starts_at config.params.ends_at state.graduated state.sold',
-          )
+          .select('factoryIndex contractId config.params.starts_at config.params.ends_at state')
           .lean();
 
         if (!launch) {
@@ -92,6 +92,7 @@ const createLaunchStore = (configuration: Configuration): LaunchStore => {
           endsAt: typeof params.ends_at === 'string' ? params.ends_at : null,
           graduated: launch.state.graduated === true,
           sold: String(launch.state.sold),
+          state: launch.state,
           claimedUntil,
         });
       }

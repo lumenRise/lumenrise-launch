@@ -39,6 +39,7 @@ describe('server launch metadata', () => {
     });
 
     expect(TokenImage.findOne).toHaveBeenCalledWith({
+      chain: 'stellar',
       network: 'testnet',
       ownerAddress: 'owner',
       publicUrl: launch.metadata.logo,
@@ -46,14 +47,17 @@ describe('server launch metadata', () => {
     });
   });
 
-  it.each([null, {}])('does not fall back to the contract description without server text: %j', async (image) => {
-    vi.mocked(TokenImage.findOne).mockReturnValue({
-      lean: vi.fn().mockResolvedValue(image),
-    } as never);
+  it.each([null, {}])(
+    'does not fall back to the contract description without server text: %j',
+    async (image) => {
+      vi.mocked(TokenImage.findOne).mockReturnValue({
+        lean: vi.fn().mockResolvedValue(image),
+      } as never);
 
-    await expect(resolveLaunchMetadata(launch)).resolves.toEqual({
-      ...launch.metadata,
-      description: '',
-    });
-  });
+      await expect(resolveLaunchMetadata(launch)).resolves.toEqual({
+        ...launch.metadata,
+        description: '',
+      });
+    },
+  );
 });

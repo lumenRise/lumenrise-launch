@@ -4,6 +4,13 @@ import type { TokenImageData } from '../types/tokenImage';
 
 const schema = new Schema<TokenImageData>(
   {
+    chain: {
+      type: String,
+      enum: ['stellar', 'base'],
+      required: true,
+      default: 'stellar',
+      immutable: true,
+    },
     ownerIdentityId: { type: Schema.Types.ObjectId, required: true },
     ownerAddress: { type: String, required: true },
     network: { type: String, enum: ['testnet', 'public'], required: true },
@@ -32,20 +39,20 @@ const schema = new Schema<TokenImageData>(
 );
 
 schema.index(
-  { network: 1, assetContractId: 1 },
+  { chain: 1, network: 1, assetContractId: 1 },
   {
     unique: true,
     partialFilterExpression: { assetContractId: { $type: 'string' } },
-    name: 'token_images_asset_unique',
+    name: 'token_images_asset_unique_chain',
   },
 );
 
 schema.index(
-  { network: 1, launchContractId: 1 },
+  { chain: 1, network: 1, launchContractId: 1 },
   {
     unique: true,
     partialFilterExpression: { launchContractId: { $type: 'string' } },
-    name: 'token_images_launch_unique',
+    name: 'token_images_launch_unique_chain',
   },
 );
 

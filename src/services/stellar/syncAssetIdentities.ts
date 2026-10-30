@@ -8,6 +8,7 @@ import checkHorizonAvailability from './checkHorizonAvailability';
 
 const syncAssetIdentities = async (configuration: Configuration): Promise<number> => {
   const assets = await Launch.distinct('asset', {
+    chain: 'stellar' as const,
     network: configuration.network,
   });
 
@@ -42,9 +43,13 @@ const syncAssetIdentities = async (configuration: Configuration): Promise<number
     timeout: 15_000,
   });
 
-  await server.getNetwork();
+  const remote = await server.getNetwork();
 
-  await checkHorizonAvailability(configuration.horizonUrl);
+  if (remote.passphrase !== configuration.networkPassphrase) {
+    throw new Error('Stellar asset identity RPC network mismatch');
+  }
+
+  await checkHorizonAvailability(configuration.horizonUrl, configuration.networkPassphrase);
 
   const source = new Account(contract.NULL_ACCOUNT, '0');
 

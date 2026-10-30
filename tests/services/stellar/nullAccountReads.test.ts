@@ -77,7 +77,7 @@ describe('automatic source for launch reads', () => {
     },
   );
 
-  it('starts public reads and asset sync even when the RPC reports testnet', async (): Promise<void> => {
+  it('rejects public reads and asset sync when the RPC reports testnet', async (): Promise<void> => {
     mocks.getNetwork.mockResolvedValue({ passphrase: Networks.TESTNET });
 
     const configuration = {
@@ -88,10 +88,7 @@ describe('automatic source for launch reads', () => {
       horizonUrl: 'https://horizon-testnet.stellar.org',
     } as Configuration;
 
-    const reader = await createLaunchReader(configuration);
-
-    expect(reader.network).toBe('public');
-
-    await expect(syncAssetIdentities(configuration)).resolves.toBe(1);
+    await expect(createLaunchReader(configuration)).rejects.toThrow('network mismatch');
+    await expect(syncAssetIdentities(configuration)).rejects.toThrow('network mismatch');
   });
 });

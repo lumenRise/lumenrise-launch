@@ -52,11 +52,18 @@ const startLaunchHolderWorker = async (
 
         connection = connected;
 
+        log.info({ chain: 'stellar', network: configuration.network }, 'Launch RabbitMQ connected');
+
         connected.on('error', (error: unknown) =>
           log.warn({ error }, 'Launch RabbitMQ connection error'),
         );
 
         connected.on('close', () => {
+          log.info(
+            { chain: 'stellar', network: configuration.network },
+            'Launch RabbitMQ disconnected',
+          );
+
           if (broker === connected) {
             broker = null;
           }

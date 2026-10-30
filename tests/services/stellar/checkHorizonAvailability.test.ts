@@ -8,11 +8,20 @@ afterEach((): void => {
 
 describe('Horizon availability', () => {
   it('accepts a reachable Horizon without checking its network passphrase', async (): Promise<void> => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      network_passphrase: 'Test SDF Network ; September 2015',
-    }))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            network_passphrase: 'Test SDF Network ; September 2015',
+          }),
+        ),
+      ),
+    );
 
-    await expect(checkHorizonAvailability('https://horizon-testnet.stellar.org')).resolves.toBeUndefined();
+    await expect(
+      checkHorizonAvailability('https://horizon-testnet.stellar.org'),
+    ).resolves.toBeUndefined();
   });
 
   it('propagates unsuccessful Horizon responses', async (): Promise<void> => {
@@ -21,5 +30,23 @@ describe('Horizon availability', () => {
     await expect(checkHorizonAvailability('https://horizon-testnet.stellar.org')).rejects.toThrow(
       'Horizon root request failed: 503',
     );
+  });
+
+  it('rejects a reachable endpoint from a different network', async (): Promise<void> => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ network_passphrase: 'Test SDF Network ; September 2015' })),
+        ),
+    );
+
+    await expect(
+      checkHorizonAvailability(
+        'https://horizon.example',
+        'Public Global Stellar Network ; September 2015',
+      ),
+    ).rejects.toThrow('network mismatch');
   });
 });

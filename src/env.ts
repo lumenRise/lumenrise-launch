@@ -24,6 +24,28 @@ const schema = defineConfig({
     type: 'number',
     default: 5_000,
   },
+  BASE_LOG_BLOCK_RANGE: {
+    type: 'number',
+    default: 1000,
+  },
+  BASE_TESTNET_RPC_URL: {
+    example: 'https://base-sepolia-rpc.example',
+  },
+  BASE_PUBLIC_RPC_URL: {
+    example: 'https://base-mainnet-rpc.example',
+  },
+  BASE_TESTNET_FACTORY_ADDRESS: {
+    example: '0x1111111111111111111111111111111111111111',
+  },
+  BASE_PUBLIC_FACTORY_ADDRESS: {
+    example: '0x1111111111111111111111111111111111111111',
+  },
+  BASE_TESTNET_DEPLOYMENT_BLOCK: {
+    example: '1',
+  },
+  BASE_PUBLIC_DEPLOYMENT_BLOCK: {
+    example: '1',
+  },
   STELLAR_TESTNET_RPC_URL: {
     default: 'https://soroban-testnet.stellar.org',
   },
@@ -31,16 +53,16 @@ const schema = defineConfig({
     default: 'https://horizon-testnet.stellar.org',
   },
   LAUNCH_TESTNET_FACTORY_CONTRACT_ID: {
-    default: '',
+    example: 'CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526',
   },
   STELLAR_PUBLIC_RPC_URL: {
-    default: '',
+    example: 'https://stellar-mainnet-rpc.example',
   },
   STELLAR_PUBLIC_HORIZON_URL: {
     default: 'https://horizon.stellar.org',
   },
   LAUNCH_PUBLIC_FACTORY_CONTRACT_ID: {
-    default: '',
+    example: 'CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526',
   },
 });
 
