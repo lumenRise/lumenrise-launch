@@ -13,6 +13,8 @@ import type { BaseWriteContext } from '../../src/types/base/launch';
 import refreshBaseMarket from '../../src/services/base/refreshBaseMarket';
 import reconcileBaseChain from '../../src/services/base/reconcileBaseChain';
 
+vi.mock('../../src/logger', () => ({ default: { warn: vi.fn() } }));
+
 vi.mock('../../src/services/base/refreshBaseMarket', () => ({ default: vi.fn() }));
 
 const stableHash = `0x${'a'.repeat(64)}`;
@@ -46,9 +48,11 @@ beforeEach((): void => {
 
   vi.spyOn(BaseCheckpoint, 'find').mockReturnValue({
     sort: vi.fn().mockReturnValue({
-      lean: vi
-        .fn()
-        .mockResolvedValue([{ _id: 'checkpoint', blockNumber: 20, blockHash: orphanHash }]),
+      limit: vi.fn().mockReturnValue({
+        lean: vi
+          .fn()
+          .mockResolvedValue([{ _id: 'checkpoint', blockNumber: 20, blockHash: orphanHash }]),
+      }),
     }),
   } as never);
 
@@ -58,9 +62,13 @@ beforeEach((): void => {
     }),
   } as never);
 
-  vi.spyOn(BaseCheckpoint, 'updateOne').mockResolvedValue({} as never);
+  vi.spyOn(BaseCheckpoint, 'updateMany').mockResolvedValue({} as never);
 
   vi.spyOn(BaseCheckpoint, 'deleteMany').mockResolvedValue({} as never);
+
+  vi.spyOn(Launch, 'distinct').mockReturnValue({
+    session: vi.fn().mockResolvedValue(['orphan-launch', 'survivor']),
+  } as never);
 
   vi.spyOn(Launch, 'find')
     .mockReturnValueOnce({
@@ -99,12 +107,22 @@ it('atomically rewinds orphan trades, launches, prices, images and balances for 
   expect(await reconcileBaseChain(context)).toBe(true);
 
   expect(LaunchTrade.deleteMany).toHaveBeenCalledWith(
-    { chain: 'base', network: 'testnet', ledger: { $gt: 10 } },
+    {
+      chain: 'base',
+      network: 'testnet',
+      contractId: { $in: ['orphan-launch', 'survivor'] },
+      ledger: { $gt: 10 },
+    },
     { session },
   );
 
   expect(LaunchPriceSample.deleteMany).toHaveBeenCalledWith(
-    { chain: 'base', network: 'testnet', ledger: { $gt: 10 } },
+    {
+      chain: 'base',
+      network: 'testnet',
+      contractId: { $in: ['orphan-launch', 'survivor'] },
+      ledger: { $gt: 10 },
+    },
     { session },
   );
 
@@ -132,6 +150,16 @@ it('atomically rewinds orphan trades, launches, prices, images and balances for 
     }),
     { session },
   );
+  expect(Launch.distinct).toHaveBeenCalledWith('contractId', {
+    chain: 'base',
+    network: 'testnet',
+    factoryContractId: 'factory',
+  });
+  expect(Launch.find).toHaveBeenLastCalledWith({
+    chain: 'base',
+    network: 'testnet',
+    factoryContractId: 'factory',
+  });
 });
 
 it('does not mistake an RPC failure for a chain reorganization', async (): Promise<void> => {
@@ -144,7 +172,7 @@ it('does not mistake an RPC failure for a chain reorganization', async (): Promi
   expect(LaunchTrade.deleteMany).not.toHaveBeenCalled();
 });
 
-it('does not advance the finalized recovery boundary over an unscanned receipt', async (): Promise<void> => {
+it('finalizes canonical live checkpoints without advancing the historical cursor', async (): Promise<void> => {
   vi.mocked(context.client.getBlock)
     .mockReset()
     .mockResolvedValue({ number: 100n, hash: orphanHash } as never);
@@ -155,5 +183,24 @@ it('does not advance the finalized recovery boundary over an unscanned receipt',
 
   expect(await reconcileBaseChain(context)).toBe(false);
 
-  expect(BaseCheckpoint.updateOne).not.toHaveBeenCalled();
+  expect(BaseCheckpoint.updateMany).toHaveBeenCalledWith(
+    { network: 'testnet', factoryAddress: 'factory', finalized: false, blockNumber: { $lte: 20 } },
+    { $set: { finalized: true } },
+  );
+  expect(BaseCursor.updateOne).not.toHaveBeenCalled();
+});
+
+it('preserves historical gaps when recovery uses a finalized checkpoint ahead of history', async (): Promise<void> => {
+  vi.mocked(BaseCursor.findOne).mockReturnValue({
+    lean: async () => ({ nextBlock: '5', nextLiveBlock: '21', previousBlockHash: null }),
+  } as never);
+
+  expect(await reconcileBaseChain(context)).toBe(true);
+  expect(BaseCursor.updateOne).toHaveBeenLastCalledWith(
+    expect.objectContaining({ leaseOwner: 'worker-one' }),
+    expect.objectContaining({
+      $set: expect.objectContaining({ nextBlock: '5', nextLiveBlock: '11' }),
+    }),
+    { session },
+  );
 });

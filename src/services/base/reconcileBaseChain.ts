@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+import log from '../../logger';
 import Launch from '../../models/Launch';
 import BaseCursor from '../../models/BaseCursor';
 import LaunchName from '../../models/LaunchName';
@@ -18,7 +19,8 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
   const cursor = await BaseCursor.findOne(key).lean();
 
   const checkpoints = await BaseCheckpoint.find({ ...key, finalized: false })
-    .sort({ blockNumber: 1 })
+    .sort({ blockNumber: -1 })
+    .limit(1)
     .lean();
 
   for (const checkpoint of checkpoints) {
@@ -33,15 +35,17 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
     }
 
     if (block?.hash === checkpoint.blockHash) {
-      if (
-        BigInt(checkpoint.blockNumber) <= finalized.number &&
-        BigInt(checkpoint.blockNumber) < BigInt(cursor!.nextBlock)
-      ) {
-        await BaseCheckpoint.updateOne(
-          { _id: checkpoint._id, blockHash: checkpoint.blockHash },
-          { $set: { finalized: true } },
-        );
-      }
+      // A canonical descendant fixes its complete ancestry. Finalize its stable prefix
+      // without repeating an RPC request for every checkpoint on each live block.
+      const boundary =
+        BigInt(checkpoint.blockNumber) < finalized.number
+          ? BigInt(checkpoint.blockNumber)
+          : finalized.number;
+
+      await BaseCheckpoint.updateMany(
+        { ...key, finalized: false, blockNumber: { $lte: Number(boundary) } },
+        { $set: { finalized: true } },
+      );
 
       continue;
     }
@@ -70,7 +74,16 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
 
       const scope = { chain: 'base' as const, network: configuration.network };
 
-      const orphaned = await Launch.find({ ...scope, creationLedger: { $gt: Number(boundary) } })
+      const factoryScope = { ...scope, factoryContractId: configuration.factoryAddress };
+
+      const ownedContracts = await Launch.distinct('contractId', factoryScope).session(session);
+
+      const marketScope = { ...scope, contractId: { $in: ownedContracts } };
+
+      const orphaned = await Launch.find({
+        ...factoryScope,
+        creationLedger: { $gt: Number(boundary) },
+      })
         .session(session)
         .lean();
 
@@ -99,16 +112,19 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
 
       await Launch.deleteMany({ ...scope, contractId: { $in: contractIds } }, { session });
 
-      await LaunchTrade.deleteMany({ ...scope, ledger: { $gt: Number(boundary) } }, { session });
+      await LaunchTrade.deleteMany(
+        { ...marketScope, ledger: { $gt: Number(boundary) } },
+        { session },
+      );
 
       await LaunchPriceSample.deleteMany(
-        { ...scope, ledger: { $gt: Number(boundary) } },
+        { ...marketScope, ledger: { $gt: Number(boundary) } },
         { session },
       );
 
       await LaunchHolder.deleteMany({ ...scope, contractId: { $in: contractIds } }, { session });
 
-      const survivors = await Launch.find(scope).session(session).lean();
+      const survivors = await Launch.find(factoryScope).session(session).lean();
 
       for (const launch of survivors) {
         if (!stableBlock) {
@@ -139,14 +155,31 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
         { ...key, leaseOwner },
         {
           $set: {
-            nextBlock: (boundary + 1n).toString(),
-            previousBlockHash: stableBlock?.hash ?? null,
+            nextBlock: (BigInt(cursor!.nextBlock) < boundary + 1n
+              ? BigInt(cursor!.nextBlock)
+              : boundary + 1n
+            ).toString(),
+            nextLiveBlock: (boundary + 1n).toString(),
+            previousBlockHash:
+              BigInt(cursor!.nextBlock) < boundary + 1n
+                ? cursor!.previousBlockHash
+                : (stableBlock?.hash ?? null),
             lastScannedAt: new Date(),
           },
         },
         { session },
       );
     });
+
+    log.warn(
+      {
+        chain: 'base',
+        network: configuration.network,
+        factoryContractId: configuration.factoryAddress,
+        boundary: boundary.toString(),
+      },
+      'Base chain reorganization recovered; orphaned data removed',
+    );
 
     return true;
   }
