@@ -33,11 +33,6 @@ schema.index(
 );
 
 schema.index(
-  { chain: 1, network: 1, contractId: 1, bucket: 1 },
-  { unique: true, name: 'launch_price_samples_bucket_unique_chain' },
-);
-
-schema.index(
   { chain: 1, network: 1, contractId: 1, sampledAt: 1, ledger: 1 },
   { name: 'launch_price_samples_time_chain' },
 );
