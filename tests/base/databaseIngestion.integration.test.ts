@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
+import { encodeAbiParameters, encodeEventTopics } from 'viem';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import Launch from '../../src/models/Launch';
@@ -8,6 +9,7 @@ import LaunchName from '../../src/models/LaunchName';
 import TokenImage from '../../src/models/TokenImage';
 import createBaseLog from '../helpers/createBaseLog';
 import LaunchTrade from '../../src/models/LaunchTrade';
+import tokenAbi from '../../src/constants/base/tokenAbi';
 import LaunchHolder from '../../src/models/LaunchHolder';
 import BaseCheckpoint from '../../src/models/BaseCheckpoint';
 import LaunchPriceSample from '../../src/models/LaunchPriceSample';
@@ -132,11 +134,42 @@ describe.runIf(Boolean(process.env.LUMENRISE_TEST_DB_URI))(
       await mongoose.disconnect();
     });
 
-    it('recovers an old launch before its current trade, preserves live state during history and deduplicates replay', async (): Promise<void> => {
+    it('ignores pre-creation transfers, preserves live state during history and deduplicates replay', async (): Promise<void> => {
       const logs = await recoverUnknownBaseLaunches(context, [currentTrade]);
 
       expect(await Launch.countDocuments()).toBe(1);
       expect(await LaunchTrade.countDocuments()).toBe(0);
+
+      const transfer = {
+        ...currentTrade,
+        address: asset,
+        blockNumber: 19n,
+        logIndex: 14,
+        topics: encodeEventTopics({
+          abi: tokenAbi,
+          eventName: 'Transfer',
+          args: { from: owner, to: factory },
+        }),
+        data: encodeAbiParameters([{ type: 'uint256' }], [10n]),
+      };
+
+      await processBaseBlock({
+        context,
+        number: 19n,
+        hash: currentHash,
+        timestamp: 19n,
+        logs: [transfer],
+        advance: true,
+        mode: 'history',
+        expectedNextBlock: '5',
+      });
+
+      expect(await LaunchHolder.countDocuments()).toBe(0);
+      expect(await LaunchPriceSample.countDocuments({ ledger: 19 })).toBe(0);
+      expect((await BaseCursor.findOne({ factoryAddress: factory }).lean())?.nextBlock).toBe('20');
+      expect(
+        vi.mocked(readBaseLaunch).mock.calls.some(([input]) => input.blockNumber === 19n),
+      ).toBe(false);
 
       await processBaseBlock({
         context,
@@ -151,7 +184,7 @@ describe.runIf(Boolean(process.env.LUMENRISE_TEST_DB_URI))(
 
       const liveCursor = await BaseCursor.findOne({ factoryAddress: factory }).lean();
 
-      expect(liveCursor?.nextBlock).toBe('5');
+      expect(liveCursor?.nextBlock).toBe('20');
       expect(liveCursor?.nextLiveBlock).toBe('101');
 
       const oldTrade = {
@@ -166,10 +199,10 @@ describe.runIf(Boolean(process.env.LUMENRISE_TEST_DB_URI))(
         number: 20n,
         hash: oldHash,
         timestamp: 20n,
-        logs: [creation, oldTrade],
+        logs: [creation, oldTrade, { ...transfer, blockNumber: 20n, blockHash: oldHash }],
         advance: true,
         mode: 'history',
-        expectedNextBlock: '5',
+        expectedNextBlock: '20',
       });
       await processBaseBlock({
         context,
@@ -189,6 +222,14 @@ describe.runIf(Boolean(process.env.LUMENRISE_TEST_DB_URI))(
       expect(launch?.state.sold).toBe('10');
       expect(holder?.observedBlock).toBe(100);
       expect(holder?.balance).toBe('10');
+
+      const creationHolder = await LaunchHolder.findOne({
+        contractId: curve,
+        address: factory,
+      }).lean();
+
+      expect(creationHolder?.observedBlock).toBe(20);
+      expect(creationHolder?.balance).toBe('1');
       expect(cursor?.nextBlock).toBe('21');
       expect(cursor?.nextLiveBlock).toBe('101');
     });
