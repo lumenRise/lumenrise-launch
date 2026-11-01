@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
 import launchAbi from '../../src/constants/base/launchAbi';
+import { graduation, key, pool } from '../helpers/basePoolFixture';
 import readBaseLaunch from '../../src/services/base/readBaseLaunch';
 import type { BaseContext } from '../../src/types/base/configuration';
 
@@ -87,4 +88,25 @@ it('rejects unsupported decimals before indexing market data', async (): Promise
     .mockResolvedValueOnce(6);
 
   await expect(readBaseLaunch({ context, address, blockNumber: 20n })).rejects.toThrow('decimals');
+});
+
+it('uses the settled V4 pool price after graduation and never calls current_price', async (): Promise<void> => {
+  readContract
+    .mockResolvedValueOnce(config)
+    .mockResolvedValueOnce({ ...state, graduated: true })
+    .mockResolvedValueOnce(18)
+    .mockResolvedValueOnce(6)
+    .mockResolvedValueOnce(graduation)
+    .mockResolvedValueOnce([key, 0n])
+    .mockResolvedValueOnce([1n << 96n, 0, 0, 3000])
+    .mockResolvedValueOnce(340490822233631430n);
+
+  const result = await readBaseLaunch({ context, address, blockNumber: 20n });
+
+  expect(result.pool).toEqual(pool);
+  expect(result.price).toBe(10n ** 18n);
+  expect(result.graduationState).toMatchObject({ token_id: '33196', settled: true });
+  expect(readContract.mock.calls.some(([call]) => call.functionName === 'current_price')).toBe(
+    false,
+  );
 });

@@ -35,7 +35,8 @@ const recoverUnknownBaseLaunches = async (
   for (const event of logs) {
     if (
       event.topics[0] !== toEventSelector('Bought(address,uint256,uint256,uint256)') &&
-      event.topics[0] !== toEventSelector('Sold(address,uint256,uint256,uint256)')
+      event.topics[0] !== toEventSelector('Sold(address,uint256,uint256,uint256)') &&
+      event.topics[0] !== toEventSelector('Graduated(uint256,uint256)')
     ) {
       continue;
     }

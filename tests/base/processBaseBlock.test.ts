@@ -24,11 +24,13 @@ const context = {
     network: 'testnet',
     factoryAddress: '0x3333333333333333333333333333333333333333',
   },
-  client: { getBlock: vi.fn() },
+  client: { getBlock: vi.fn(), readContract: vi.fn(), getLogs: vi.fn() },
 } as unknown as BaseWriteContext;
 
 beforeEach((): void => {
   vi.clearAllMocks();
+
+  vi.mocked(context.client.readContract).mockResolvedValue({ graduated: false } as never);
 
   vi.mocked(context.client.getBlock).mockResolvedValue({ hash: event.blockHash } as never);
 
@@ -46,7 +48,12 @@ beforeEach((): void => {
 
   vi.spyOn(Launch, 'findOne').mockReturnValue({
     session: vi.fn().mockReturnValue({
-      lean: vi.fn().mockResolvedValue({ asset: 'token', assetDecimals: 18, pairDecimals: 6 }),
+      lean: vi.fn().mockResolvedValue({
+        contractId: event.address,
+        asset: 'token',
+        assetDecimals: 18,
+        pairDecimals: 6,
+      }),
     }),
   } as never);
 

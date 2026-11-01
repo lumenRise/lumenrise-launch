@@ -16,8 +16,30 @@ const initializeBaseLiveCursor = async (
   }
 
   try {
+    const cursor = await BaseCursor.findOne({
+      network,
+      factoryAddress: context.configuration.factoryAddress,
+      leaseOwner: writer.leaseOwner,
+    }).lean();
+
+    if (!cursor) {
+      throw new Error('Base live initialization lease expired');
+    }
+
+    if (
+      cursor.nextLiveBlock !== undefined &&
+      cursor.nextLiveBlock !== null &&
+      cursor.historyEndBlock !== undefined &&
+      cursor.historyEndBlock !== null
+    ) {
+      return true;
+    }
+
     const start =
       head < context.configuration.deploymentBlock ? context.configuration.deploymentBlock : head;
+
+    const nextLiveBlock = cursor.nextLiveBlock ?? start.toString();
+    const historyEndBlock = cursor.historyEndBlock ?? (BigInt(nextLiveBlock) - 1n).toString();
 
     const updated = await BaseCursor.updateOne(
       {
@@ -25,7 +47,7 @@ const initializeBaseLiveCursor = async (
         factoryAddress: context.configuration.factoryAddress,
         leaseOwner: writer.leaseOwner,
       },
-      { $set: { nextLiveBlock: start.toString(), historyEndBlock: (start - 1n).toString() } },
+      { $set: { nextLiveBlock, historyEndBlock } },
     );
 
     if (updated.matchedCount !== 1) {

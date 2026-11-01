@@ -4,10 +4,12 @@ import log from '../../src/logger';
 import Launch from '../../src/models/Launch';
 import BaseCursor from '../../src/models/BaseCursor';
 import createBaseLog from '../helpers/createBaseLog';
+import createBaseSwapLog from '../helpers/createBaseSwapLog';
 import getBaseContext from '../../src/services/base/getBaseContext';
 import type { BaseWriteContext } from '../../src/types/base/launch';
 import createBaseCreationLog from '../helpers/createBaseCreationLog';
 import scanBaseNetwork from '../../src/services/base/scanBaseNetwork';
+import uniswapDeployments from '../../src/constants/base/uniswapDeployments';
 import commitBaseScanBlock from '../../src/services/base/commitBaseScanBlock';
 
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
@@ -76,7 +78,8 @@ it('does not log empty block scans as activity', async (): Promise<void> => {
 it('discovers a launch before querying its first same-block trade and token transfers', async (): Promise<void> => {
   vi.mocked(context.client.getLogs)
     .mockResolvedValueOnce([creation] as never)
-    .mockResolvedValueOnce([trade] as never);
+    .mockResolvedValueOnce([trade] as never)
+    .mockResolvedValueOnce([]);
 
   await scanBaseNetwork('testnet');
 
@@ -133,7 +136,8 @@ it('discovers live trades without requiring their launch address in the database
 
   vi.mocked(context.client.getLogs)
     .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([trade] as never);
+    .mockResolvedValueOnce([trade] as never)
+    .mockResolvedValueOnce([]);
 
   await scanBaseNetwork('testnet', 'live');
 
@@ -165,3 +169,29 @@ it('bounds historical catch-up at the live starting boundary', async (): Promise
     expect.objectContaining({ number: 19n, expectedNextBlock: '10' }),
   );
 });
+
+it.each(['testnet', 'public'] as const)(
+  'scans V4 swaps from the official %s PoolManager',
+  async (network): Promise<void> => {
+    const swap = { ...createBaseSwapLog(), address: uniswapDeployments[network].poolManager };
+
+    vi.mocked(context.client.getLogs)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([swap] as never);
+
+    await scanBaseNetwork(network);
+
+    expect(context.client.getLogs).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        address: uniswapDeployments[network].poolManager,
+        fromBlock: 20n,
+        toBlock: 20n,
+        event: expect.objectContaining({ name: 'Swap' }),
+      }),
+    );
+    expect(commitBaseScanBlock).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ logs: [swap] }),
+    );
+  },
+);

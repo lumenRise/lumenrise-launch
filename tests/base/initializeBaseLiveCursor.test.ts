@@ -8,7 +8,9 @@ import releaseBaseLease from '../../src/services/base/releaseBaseLease';
 import initializeBaseLiveCursor from '../../src/services/base/initializeBaseLiveCursor';
 
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
-vi.mock('../../src/models/BaseCursor', () => ({ default: { updateOne: vi.fn() } }));
+vi.mock('../../src/models/BaseCursor', () => ({
+  default: { findOne: vi.fn(), updateOne: vi.fn() },
+}));
 vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
 vi.mock('../../src/services/base/acquireBaseLease', () => ({ default: vi.fn() }));
 vi.mock('../../src/services/base/releaseBaseLease', () => ({ default: vi.fn() }));
@@ -25,6 +27,10 @@ beforeEach((): void => {
   vi.mocked(getBaseContext).mockResolvedValue(context);
   vi.mocked(acquireBaseLease).mockResolvedValue(context);
   vi.mocked(context.client.getBlockNumber).mockResolvedValue(100n);
+  vi.mocked(BaseCursor.findOne).mockReturnValue({
+    lean: vi.fn().mockResolvedValue({ nextBlock: '1' }),
+  } as never);
+
   vi.mocked(BaseCursor.updateOne).mockResolvedValue({ matchedCount: 1 } as never);
 });
 
@@ -42,4 +48,32 @@ it('waits for the shared writer instead of declaring live indexing initialized p
 
   await expect(initializeBaseLiveCursor('testnet')).resolves.toBe(false);
   expect(BaseCursor.updateOne).not.toHaveBeenCalled();
+});
+
+it('resumes the saved live cursor after downtime without moving it to the new head', async (): Promise<void> => {
+  vi.mocked(context.client.getBlockNumber).mockResolvedValue(1000n);
+
+  vi.mocked(BaseCursor.findOne).mockReturnValue({
+    lean: vi
+      .fn()
+      .mockResolvedValue({ nextBlock: '10', nextLiveBlock: '80', historyEndBlock: '49' }),
+  } as never);
+
+  await expect(initializeBaseLiveCursor('testnet')).resolves.toBe(true);
+
+  expect(BaseCursor.updateOne).not.toHaveBeenCalled();
+  expect(releaseBaseLease).toHaveBeenCalledWith(context);
+});
+
+it('completes a partial initialization without skipping a persisted live backlog', async (): Promise<void> => {
+  vi.mocked(BaseCursor.findOne).mockReturnValue({
+    lean: vi.fn().mockResolvedValue({ nextBlock: '10', nextLiveBlock: '80' }),
+  } as never);
+
+  await initializeBaseLiveCursor('testnet');
+
+  expect(BaseCursor.updateOne).toHaveBeenCalledWith(
+    expect.objectContaining({ leaseOwner: 'writer' }),
+    { $set: { nextLiveBlock: '80', historyEndBlock: '79' } },
+  );
 });

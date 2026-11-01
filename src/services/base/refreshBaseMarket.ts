@@ -30,6 +30,8 @@ const refreshBaseMarket = async (
     {
       $set: {
         state: read.state,
+        pool: read.pool ?? null,
+        graduationState: read.graduationState ?? null,
         stateAsOfLedger: Number(blockNumber),
         stateObservedAt: new Date(),
         nextStatePollAt: new Date(Date.now() + 900_000),
