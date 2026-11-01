@@ -141,6 +141,8 @@ const indexBaseLaunch = async (
         metadata,
         config: read.plainConfig,
         state: read.state,
+        pool: read.pool ?? null,
+        graduationState: read.graduationState ?? null,
         asOfLedger: Number(log.blockNumber),
         stateAsOfLedger: Number(log.blockNumber),
         observedAt: new Date(),

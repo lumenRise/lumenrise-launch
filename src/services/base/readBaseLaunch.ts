@@ -1,3 +1,4 @@
+import readBasePool from './readBasePool';
 import tokenAbi from '../../constants/base/tokenAbi';
 import launchAbi from '../../constants/base/launchAbi';
 import type { BaseLaunchRead, BaseLaunchSnapshot } from '../../types/base/launch';
@@ -19,12 +20,14 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
     blockNumber,
   });
 
-  const price = await context.client.readContract({
-    address,
-    abi: launchAbi,
-    functionName: 'current_price',
-    blockNumber,
-  });
+  const curvePrice = state.graduated
+    ? null
+    : await context.client.readContract({
+        address,
+        abi: launchAbi,
+        functionName: 'current_price',
+        blockNumber,
+      });
 
   if (config.factory.toLowerCase() !== context.configuration.factoryAddress) {
     throw new Error('Base launch factory mismatch');
@@ -47,8 +50,7 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
   if (
     assetDecimals > 18 ||
     pairDecimals > 18 ||
-    price <= 0n ||
-    price >= 2n ** 256n ||
+    (curvePrice !== null && (curvePrice <= 0n || curvePrice >= 2n ** 256n)) ||
     state.buyer_count > BigInt(Number.MAX_SAFE_INTEGER)
   ) {
     throw new Error('Unsupported Base token decimals, price or buyer count');
@@ -84,7 +86,33 @@ const readBaseLaunch = async (input: BaseLaunchRead): Promise<BaseLaunchSnapshot
 
   vesting.schedule = schedule;
 
-  return { config, plainConfig, state: plainState, price, assetDecimals, pairDecimals };
+  const poolSnapshot = state.graduated
+    ? await readBasePool({
+        context,
+        address,
+        blockNumber,
+        asset: config.params.asset,
+        pair: config.params.pair,
+        assetDecimals,
+      })
+    : null;
+
+  const price = poolSnapshot?.price ?? curvePrice;
+
+  if (price === null) {
+    throw new Error('Base launch has no market price');
+  }
+
+  return {
+    config,
+    plainConfig,
+    state: plainState,
+    price,
+    pool: poolSnapshot?.pool ?? null,
+    graduationState: poolSnapshot?.graduationState ?? null,
+    assetDecimals,
+    pairDecimals,
+  };
 };
 
 export default readBaseLaunch;

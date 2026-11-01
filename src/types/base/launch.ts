@@ -1,6 +1,7 @@
 import type { ClientSession } from 'mongoose';
 import type { Log, Address, ContractFunctionReturnType } from 'viem';
 
+import type { BasePool } from './pool';
 import type { BaseContext } from './configuration';
 import type launchAbi from '../../constants/base/launchAbi';
 
@@ -51,6 +52,8 @@ interface BaseLaunchSnapshot {
   plainConfig: Record<string, unknown>;
   state: Record<string, unknown>;
   price: bigint;
+  pool: BasePool | null;
+  graduationState: Record<string, unknown> | null;
   assetDecimals: number;
   pairDecimals: number;
 }
