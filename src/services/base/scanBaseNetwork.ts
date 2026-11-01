@@ -4,11 +4,13 @@ import { getAbiItem, decodeEventLog, toEventSelector } from 'viem';
 import Launch from '../../models/Launch';
 import getBaseContext from './getBaseContext';
 import BaseCursor from '../../models/BaseCursor';
+import poolAbi from '../../constants/base/poolAbi';
 import launchAbi from '../../constants/base/launchAbi';
 import commitBaseScanBlock from './commitBaseScanBlock';
 import factoryAbi from '../../constants/base/factoryAbi';
 import type { BaseScanMode } from '../../types/base/launch';
 import markBaseImagesForCleanup from './markBaseImagesForCleanup';
+import uniswapDeployments from '../../constants/base/uniswapDeployments';
 
 const scanBaseNetwork = async (
   network: 'testnet' | 'public',
@@ -102,6 +104,7 @@ const scanBaseNetwork = async (
         events: [
           getAbiItem({ abi: launchAbi, name: 'Bought' }),
           getAbiItem({ abi: launchAbi, name: 'Sold' }),
+          getAbiItem({ abi: launchAbi, name: 'Graduated' }),
         ],
         fromBlock,
         toBlock,
@@ -120,6 +123,15 @@ const scanBaseNetwork = async (
       })),
     );
   }
+
+  const poolLogs = await client.getLogs({
+    address: uniswapDeployments[network].poolManager,
+    event: poolAbi[0],
+    fromBlock,
+    toBlock,
+  });
+
+  logs.push(...poolLogs);
 
   const blocks = new Map<bigint, Log[]>();
   const seen = new Set<string>();
