@@ -1,8 +1,7 @@
-import type { Address, PublicClient } from 'viem';
+import type { Address, PublicClient, TransactionReceipt } from 'viem';
 
 interface BaseConfiguration {
   network: 'testnet' | 'public';
-  chainId: 8453 | 84532;
   rpcUrl: string;
   factoryAddress: Address;
   deploymentBlock: bigint;
@@ -12,6 +11,7 @@ interface BaseConfiguration {
 interface BaseContext {
   configuration: BaseConfiguration;
   client: PublicClient;
+  receipts?: Map<string, TransactionReceipt>;
 }
 
 export type { BaseConfiguration, BaseContext };
