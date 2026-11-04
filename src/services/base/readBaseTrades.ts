@@ -3,7 +3,6 @@ import type { Log, Address } from 'viem';
 
 import readBaseLaunch from './readBaseLaunch';
 import decodeBaseTrade from './decodeBaseTrade';
-import launchAbi from '../../constants/base/launchAbi';
 import decodeBasePoolTrade from './decodeBasePoolTrade';
 import type { TradeRecord } from '../../types/launch/market';
 import type { BaseContext } from '../../types/base/configuration';
@@ -27,34 +26,13 @@ const readBaseTrades = async (
   );
 
   if (curveLogs.length > 0) {
-    const blockNumber = curveLogs[0]!.blockNumber!;
-
-    // Read the historical state, since the stored snapshot can be ahead of backfill.
-    const state = await context.client.readContract({
-      address: launch.contractId as Address,
-      abi: launchAbi,
-      functionName: 'get_state',
-      blockNumber,
-    });
-
-    let graduationTransactionIndex: number | null = null;
-
-    if (state.graduated) {
-      const graduations = await context.client.getLogs({
-        address: launch.contractId as Address,
-        event: launchAbi.find((entry) => entry.type === 'event' && entry.name === 'Graduated')!,
-        fromBlock: blockNumber,
-        toBlock: blockNumber,
-      });
-
-      graduationTransactionIndex = graduations[0]?.transactionIndex ?? null;
-    }
-
     for (const event of curveLogs) {
       if (
-        state.graduated &&
-        (graduationTransactionIndex === null ||
-          event.transactionIndex! > graduationTransactionIndex)
+        launch.graduationBlock != null &&
+        (Number(event.blockNumber) > launch.graduationBlock ||
+          (Number(event.blockNumber) === launch.graduationBlock &&
+            launch.graduationLogIndex != null &&
+            event.logIndex! > launch.graduationLogIndex))
       ) {
         continue;
       }
@@ -78,11 +56,13 @@ const readBaseTrades = async (
   );
 
   if (swaps.length > 0) {
-    const snapshot = await readBaseLaunch({
-      context,
-      address: launch.contractId as Address,
-      blockNumber: swaps[0]!.blockNumber!,
-    });
+    const snapshot = launch.pool
+      ? { pool: launch.pool }
+      : await readBaseLaunch({
+          context,
+          address: launch.contractId as Address,
+          blockNumber: swaps[0]!.blockNumber!,
+        });
 
     if (!snapshot.pool) {
       return trades;
@@ -98,9 +78,11 @@ const readBaseTrades = async (
       let sender = senders.get(event.transactionHash!);
 
       if (!sender) {
-        const receipt = await context.client.getTransactionReceipt({
-          hash: event.transactionHash!,
-        });
+        const receipt =
+          context.receipts?.get(event.transactionHash!) ??
+          (await context.client.getTransactionReceipt({
+            hash: event.transactionHash!,
+          }));
 
         if (
           receipt.status !== 'success' ||

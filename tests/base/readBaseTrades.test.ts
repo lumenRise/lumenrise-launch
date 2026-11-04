@@ -42,30 +42,27 @@ it('keeps historical curve trades even when the stored launch is graduated', asy
       100n,
     ),
   ).toHaveLength(1);
-  expect(readContract).toHaveBeenCalledWith(
-    expect.objectContaining({ functionName: 'get_state', blockNumber: 20n }),
-  );
+
+  expect(readContract).not.toHaveBeenCalled();
 });
 
-it('keeps the final curve buy and excludes curve trades after the graduation transaction', async (): Promise<void> => {
+it('keeps the final curve buy and excludes events after the recorded graduation boundary without RPC', async (): Promise<void> => {
   const event = createBaseLog();
+  const graduated = { ...launch, graduationBlock: 20, graduationLogIndex: event.logIndex };
 
-  readContract.mockResolvedValue({ graduated: true });
-  getLogs.mockResolvedValue([{ transactionIndex: event.transactionIndex }]);
+  expect(await readBaseTrades(context, graduated, [event], 100n)).toHaveLength(1);
 
-  expect(await readBaseTrades(context, launch, [event], 100n)).toHaveLength(1);
   expect(
-    await readBaseTrades(
-      context,
-      launch,
-      [{ ...event, transactionIndex: event.transactionIndex! + 1 }],
-      100n,
-    ),
+    await readBaseTrades(context, graduated, [{ ...event, logIndex: event.logIndex! + 1 }], 100n),
   ).toEqual([]);
 
-  getLogs.mockResolvedValue([]);
+  expect(await readBaseTrades(context, graduated, [{ ...event, blockNumber: 21n }], 100n)).toEqual(
+    [],
+  );
 
-  expect(await readBaseTrades(context, launch, [event], 100n)).toEqual([]);
+  expect(readContract).not.toHaveBeenCalled();
+
+  expect(getLogs).not.toHaveBeenCalled();
 });
 
 it('records matching pool swaps once per log and attributes the transaction sender instead of the router', async (): Promise<void> => {
@@ -92,7 +89,9 @@ it('records matching pool swaps once per log and attributes the transaction send
   );
 
   expect(trades).toHaveLength(2);
+
   expect(trades[0]).toMatchObject({ trader, contractId: curve, side: 'buy' });
+
   expect(getTransactionReceipt).toHaveBeenCalledTimes(1);
 
   getTransactionReceipt.mockResolvedValue({
@@ -109,5 +108,6 @@ it('ignores pool events before the launch has graduated', async (): Promise<void
   vi.mocked(readBaseLaunch).mockResolvedValue({ pool: null } as never);
 
   expect(await readBaseTrades(context, launch, [createBaseSwapLog()], 100n)).toEqual([]);
+
   expect(getTransactionReceipt).not.toHaveBeenCalled();
 });
