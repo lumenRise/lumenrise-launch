@@ -3,15 +3,12 @@ import amqp from 'amqplib';
 import log from '../../logger';
 import parseJobId from '../../workers/parseJobId';
 import type { Configuration } from '../../types/configuration';
+import type { HolderJobReader } from '../../types/launch/holder';
 import { startPolledQueueWorker } from '../../workers/polledQueue';
-import type { HolderBalanceReader } from '../../types/launch/holder';
 import { LAUNCH_HOLDER_QUEUE } from '../../constants/launch/holderQueue';
 import processLaunchHolderJob from '../../workers/processLaunchHolderJob';
 
-const startLaunchHolderWorker = async (
-  reader: HolderBalanceReader,
-  configuration: Configuration,
-) => {
+const startLaunchHolderWorker = async (reader: HolderJobReader, configuration: Configuration) => {
   const worker = await startPolledQueueWorker({
     broker: null,
     queue: `${LAUNCH_HOLDER_QUEUE}.${configuration.network}`,
@@ -33,6 +30,7 @@ const startLaunchHolderWorker = async (
 
     retryTimer = setTimeout(() => {
       retryTimer = null;
+
       void connect();
     }, 5000);
   };
@@ -67,6 +65,7 @@ const startLaunchHolderWorker = async (
           if (broker === connected) {
             broker = null;
           }
+
           reconnect();
         });
 
@@ -87,6 +86,7 @@ const startLaunchHolderWorker = async (
         connecting = null;
       }
     })();
+
     return connecting;
   };
 
@@ -101,7 +101,9 @@ const startLaunchHolderWorker = async (
       }
 
       await connecting;
+
       await worker.stop();
+
       await broker?.close().catch(() => {});
     },
   };

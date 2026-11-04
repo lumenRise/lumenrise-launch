@@ -43,12 +43,11 @@ describe('launch holder job processing', () => {
 
     expect(claimLaunchHolderJob).toHaveBeenCalledWith('testnet', 'job');
 
-    expect(refreshLaunchHolder).toHaveBeenCalledWith(
-      reader,
-      { chain: 'stellar', network: 'testnet', contractId: 'launch' },
-      'token',
-      'wallet',
-    );
+    expect(refreshLaunchHolder).toHaveBeenCalledWith(reader, {
+      chain: 'stellar',
+      network: 'testnet',
+      contractId: 'launch',
+    });
 
     expect(LaunchHolderRefreshJob.updateOne).toHaveBeenCalledWith(
       { _id: 'job', requestId: job.requestId, status: 'running', leaseUntil: job.leaseUntil },
