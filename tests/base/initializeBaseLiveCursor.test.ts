@@ -8,11 +8,15 @@ import releaseBaseLease from '../../src/services/base/releaseBaseLease';
 import initializeBaseLiveCursor from '../../src/services/base/initializeBaseLiveCursor';
 
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../src/models/BaseCursor', () => ({
   default: { findOne: vi.fn(), updateOne: vi.fn() },
 }));
+
 vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/services/base/acquireBaseLease', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/services/base/releaseBaseLease', () => ({ default: vi.fn() }));
 
 const context = {
@@ -25,8 +29,11 @@ beforeEach((): void => {
   vi.resetAllMocks();
 
   vi.mocked(getBaseContext).mockResolvedValue(context);
+
   vi.mocked(acquireBaseLease).mockResolvedValue(context);
+
   vi.mocked(context.client.getBlockNumber).mockResolvedValue(100n);
+
   vi.mocked(BaseCursor.findOne).mockReturnValue({
     lean: vi.fn().mockResolvedValue({ nextBlock: '1' }),
   } as never);
@@ -35,18 +42,23 @@ beforeEach((): void => {
 });
 
 it('starts at the current head and bounds catch-up without overwriting the historical cursor', async (): Promise<void> => {
-  await expect(initializeBaseLiveCursor('testnet')).resolves.toBe(true);
+  await expect(initializeBaseLiveCursor('testnet', 100n)).resolves.toBe(true);
+
   expect(BaseCursor.updateOne).toHaveBeenCalledWith(
     { network: 'testnet', factoryAddress: 'factory', leaseOwner: 'writer' },
     { $set: { nextLiveBlock: '100', historyEndBlock: '99' } },
   );
+
   expect(releaseBaseLease).toHaveBeenCalledWith(context);
+
+  expect(context.client.getBlockNumber).not.toHaveBeenCalled();
 });
 
 it('waits for the shared writer instead of declaring live indexing initialized prematurely', async (): Promise<void> => {
   vi.mocked(acquireBaseLease).mockResolvedValue(null);
 
-  await expect(initializeBaseLiveCursor('testnet')).resolves.toBe(false);
+  await expect(initializeBaseLiveCursor('testnet', 100n)).resolves.toBe(false);
+
   expect(BaseCursor.updateOne).not.toHaveBeenCalled();
 });
 
@@ -59,9 +71,10 @@ it('resumes the saved live cursor after downtime without moving it to the new he
       .mockResolvedValue({ nextBlock: '10', nextLiveBlock: '80', historyEndBlock: '49' }),
   } as never);
 
-  await expect(initializeBaseLiveCursor('testnet')).resolves.toBe(true);
+  await expect(initializeBaseLiveCursor('testnet', 100n)).resolves.toBe(true);
 
   expect(BaseCursor.updateOne).not.toHaveBeenCalled();
+
   expect(releaseBaseLease).toHaveBeenCalledWith(context);
 });
 
@@ -70,7 +83,7 @@ it('completes a partial initialization without skipping a persisted live backlog
     lean: vi.fn().mockResolvedValue({ nextBlock: '10', nextLiveBlock: '80' }),
   } as never);
 
-  await initializeBaseLiveCursor('testnet');
+  await initializeBaseLiveCursor('testnet', 100n);
 
   expect(BaseCursor.updateOne).toHaveBeenCalledWith(
     expect.objectContaining({ leaseOwner: 'writer' }),
