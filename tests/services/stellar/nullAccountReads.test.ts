@@ -25,11 +25,13 @@ vi.mock('@stellar/stellar-sdk', async (load) => {
 });
 
 vi.mock('../../../src/models/Launch', () => ({ default: { distinct: vi.fn() } }));
+
 vi.mock('../../../src/models/AssetIdentity', () => ({
   default: { find: vi.fn(), updateOne: vi.fn() },
 }));
+
 vi.mock('../../../src/services/stellar/readContract', () => ({ default: vi.fn() }));
-vi.mock('../../../src/services/stellar/checkHorizonAvailability', () => ({ default: vi.fn() }));
+
 vi.mock('../../../src/services/stellar/resolveAssetIdentity', () => ({ default: vi.fn() }));
 
 const contractId = StrKey.encodeContract(Buffer.alloc(32, 1));
@@ -39,8 +41,11 @@ describe('automatic source for launch reads', () => {
     vi.clearAllMocks();
 
     vi.mocked(readContract).mockResolvedValue({ value: 1, ledger: 100 });
+
     vi.mocked(Launch.distinct).mockResolvedValue([contractId]);
+
     vi.mocked(AssetIdentity.find).mockReturnValue({ lean: vi.fn().mockResolvedValue([]) } as never);
+
     vi.mocked(resolveAssetIdentity).mockResolvedValue({ status: 'verified' } as never);
   });
 
@@ -66,6 +71,7 @@ describe('automatic source for launch reads', () => {
       const source = vi.mocked(readContract).mock.calls[0]![1];
 
       expect(source.accountId()).toBe(contract.NULL_ACCOUNT);
+
       expect(source.sequenceNumber()).toBe('0');
 
       await syncAssetIdentities(configuration);
@@ -73,11 +79,12 @@ describe('automatic source for launch reads', () => {
       const assetSource = vi.mocked(resolveAssetIdentity).mock.calls[0]![2];
 
       expect(assetSource.accountId()).toBe(contract.NULL_ACCOUNT);
+
       expect(assetSource.sequenceNumber()).toBe('0');
     },
   );
 
-  it('rejects public reads and asset sync when the RPC reports testnet', async (): Promise<void> => {
+  it('trusts configured providers without querying their network identity', async (): Promise<void> => {
     mocks.getNetwork.mockResolvedValue({ passphrase: Networks.TESTNET });
 
     const configuration = {
@@ -88,7 +95,10 @@ describe('automatic source for launch reads', () => {
       horizonUrl: 'https://horizon-testnet.stellar.org',
     } as Configuration;
 
-    await expect(createLaunchReader(configuration)).rejects.toThrow('network mismatch');
-    await expect(syncAssetIdentities(configuration)).rejects.toThrow('network mismatch');
+    await expect(createLaunchReader(configuration)).resolves.toBeDefined();
+
+    await expect(syncAssetIdentities(configuration)).resolves.toBe(1);
+
+    expect(mocks.getNetwork).not.toHaveBeenCalled();
   });
 });
