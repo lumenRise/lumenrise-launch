@@ -1,63 +1,73 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import runBaseWorker from '../../src/services/base/runBaseWorker';
+import getBaseRuntime from '../../src/services/base/getBaseRuntime';
+import getBaseContext from '../../src/services/base/getBaseContext';
 import scanBaseNetwork from '../../src/services/base/scanBaseNetwork';
-import getBaseConfiguration from '../../src/services/base/getBaseConfiguration';
-import initializeBaseLiveCursor from '../../src/services/base/initializeBaseLiveCursor';
+import runBaseScanLoop from '../../src/services/base/runBaseScanLoop';
 
-vi.mock('../../src/logger', () => ({ default: { info: vi.fn(), error: vi.fn() } }));
+vi.mock('../../src/logger', () => ({ default: { error: vi.fn() } }));
+
+vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/services/base/scanBaseNetwork', () => ({ default: vi.fn() }));
-vi.mock('../../src/services/base/getBaseConfiguration', () => ({ default: vi.fn() }));
-vi.mock('../../src/services/base/initializeBaseLiveCursor', () => ({ default: vi.fn() }));
+
+vi.mock('../../src/services/base/acquireBaseLease', () => ({ default: vi.fn(async () => null) }));
+
+vi.mock('../../src/services/base/markBaseImagesForCleanup', () => ({ default: vi.fn() }));
 
 beforeEach((): void => {
-  vi.resetAllMocks();
+  vi.clearAllMocks();
 
-  vi.mocked(initializeBaseLiveCursor).mockResolvedValue(true);
-  vi.mocked(getBaseConfiguration).mockReturnValue({
-    network: 'testnet',
-    factoryAddress: 'factory',
-  } as never);
+  const runtime = getBaseRuntime('testnet');
+
+  Object.assign(runtime, {
+    initialized: true,
+    holdingsInitialized: true,
+    head: 100n,
+    factoryAt: 0,
+    poolAt: 0,
+    checkAt: 0,
+    cleanupAt: Infinity,
+    historyActive: false,
+  });
 });
 
-it('receives live blocks while historical RPC retrieval is still blocked and drains both on shutdown', async (): Promise<void> => {
+afterEach((): void => {
+  vi.restoreAllMocks();
+});
+
+it('factory work consumes the shared head without issuing another latest-block request', async (): Promise<void> => {
   const controller = new AbortController();
-  let finishHistory: () => void = (): void => {};
-  let liveReceived = false;
 
-  const historical = new Promise<void>((resolve): void => {
-    finishHistory = resolve;
-  });
-
-  vi.mocked(scanBaseNetwork).mockImplementation(async (_network, mode): Promise<void> => {
-    if (mode === 'history') {
-      await historical;
-
-      return;
-    }
-
-    liveReceived = true;
-
+  vi.mocked(scanBaseNetwork).mockImplementation(async (): Promise<boolean> => {
     controller.abort();
+
+    return true;
   });
 
-  let stopped = false;
+  await runBaseScanLoop(controller.signal, 'testnet', 'live');
 
-  const worker = runBaseWorker(controller.signal, ['testnet']).then((): void => {
-    stopped = true;
+  expect(getBaseContext).not.toHaveBeenCalled();
+
+  expect(scanBaseNetwork).toHaveBeenCalledExactlyOnceWith('testnet', 'live');
+
+  expect(getBaseRuntime('testnet').factoryAt).toBeGreaterThan(Date.now() + 55_000);
+});
+
+it('shares the observed head with pool work without creating another RPC client', async (): Promise<void> => {
+  const controller = new AbortController();
+
+  vi.mocked(scanBaseNetwork).mockImplementation(async (): Promise<boolean> => {
+    controller.abort();
+
+    return true;
   });
 
-  await vi.waitFor((): void => {
-    expect(liveReceived).toBe(true);
-  });
+  await runBaseScanLoop(controller.signal, 'testnet', 'pool');
 
-  expect(stopped).toBe(false);
-  expect(scanBaseNetwork).toHaveBeenCalledWith('testnet', 'history');
-  expect(scanBaseNetwork).toHaveBeenCalledWith('testnet', 'live');
+  expect(getBaseContext).not.toHaveBeenCalled();
 
-  finishHistory();
+  expect(scanBaseNetwork).toHaveBeenCalledExactlyOnceWith('testnet', 'pool');
 
-  await worker;
-
-  expect(stopped).toBe(true);
+  expect(getBaseRuntime('testnet').poolAt).toBeGreaterThan(Date.now() + 10_000);
 });
