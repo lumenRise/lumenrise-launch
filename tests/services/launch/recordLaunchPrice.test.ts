@@ -5,6 +5,8 @@ import recordLaunchPrice from '../../../src/services/launch/recordLaunchPrice';
 
 vi.mock('../../../src/logger', () => ({ default: { info: vi.fn() } }));
 
+vi.mock('../../../src/models/Launch', () => ({ default: { updateOne: vi.fn() } }));
+
 vi.mock('../../../src/models/LaunchPriceSample', () => ({
   default: { findOne: vi.fn(), updateOne: vi.fn(), exists: vi.fn() },
 }));
