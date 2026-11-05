@@ -10,6 +10,14 @@ import syncAssetIdentities from '../../../src/services/stellar/syncAssetIdentiti
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 import { loadConfiguration } from '../../../src/services/configuration/loadConfiguration';
 
+vi.mock('../../../src/services/messaging/startDomainWorker', () => ({
+  default: vi.fn().mockResolvedValue({ stop: vi.fn() }),
+}));
+
+vi.mock('../../../src/services/launch/startLaunchMaintenance', () => ({
+  default: vi.fn().mockReturnValue({ stop: vi.fn() }),
+}));
+
 vi.mock('../../../src/env', () => ({
   default: { DB_URI: 'mongodb://localhost', DB_NAME: 'test' },
 }));

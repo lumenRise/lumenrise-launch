@@ -9,6 +9,14 @@ import getNetworkConfig from '../../../src/services/network/getNetworkConfig';
 import createLaunchIndexes from '../../../src/services/launch/createLaunchIndexes';
 import { loadConfiguration } from '../../../src/services/configuration/loadConfiguration';
 
+vi.mock('../../../src/services/messaging/startDomainWorker', () => ({
+  default: vi.fn().mockResolvedValue({ stop: vi.fn() }),
+}));
+
+vi.mock('../../../src/services/launch/startLaunchMaintenance', () => ({
+  default: vi.fn().mockReturnValue({ stop: vi.fn() }),
+}));
+
 vi.mock('../../../src/env', () => ({
   default: { DB_URI: 'mongodb://localhost', DB_NAME: 'test' },
 }));
@@ -41,6 +49,7 @@ beforeEach((): void => {
   vi.mocked(getBaseNetworks).mockReturnValue(['testnet']);
 
   vi.mocked(runBaseWorker).mockResolvedValue();
+
   vi.mocked(runNetworkWorker).mockResolvedValue();
 
   vi.mocked(loadConfiguration).mockReturnValue({
@@ -76,21 +85,26 @@ it('starts both chains concurrently and disconnects only after both have drained
 
   await vi.waitFor((): void => {
     expect(runNetworkWorker).toHaveBeenCalledOnce();
+
     expect(runBaseWorker).toHaveBeenCalledOnce();
   });
 
   const signal = vi.mocked(runBaseWorker).mock.calls[0]![0];
 
   expect(vi.mocked(runNetworkWorker).mock.calls[0]![1]).toBe(signal);
+
   expect(connectDatabase).toHaveBeenCalledOnce();
+
   expect(createLaunchIndexes).toHaveBeenCalledOnce();
 
   process.emit('SIGTERM');
+
   finishBase();
 
   await Promise.resolve();
 
   expect(signal.aborted).toBe(true);
+
   expect(disconnectDatabase).not.toHaveBeenCalled();
 
   finishStellar();
@@ -115,6 +129,7 @@ it('aborts and drains Stellar when the Base worker fails', async (): Promise<voi
   await expect(runLaunchWorker()).rejects.toBe(failure);
 
   expect(disconnectDatabase).toHaveBeenCalledOnce();
+
   expect(process.listenerCount('SIGTERM')).toBe(initialListeners);
 });
 
@@ -127,8 +142,11 @@ it('can run Base without a configured Stellar factory using the same database co
     dbUri: 'mongodb://localhost',
     dbName: 'test',
   });
+
   expect(runNetworkWorker).not.toHaveBeenCalled();
+
   expect(runBaseWorker).toHaveBeenCalledOnce();
+
   expect(disconnectDatabase).toHaveBeenCalledOnce();
 });
 
@@ -138,8 +156,11 @@ it('keeps Stellar running without starting an unconfigured Base loop', async ():
   await runLaunchWorker();
 
   expect(runNetworkWorker).toHaveBeenCalledOnce();
+
   expect(runBaseWorker).not.toHaveBeenCalled();
+
   expect(connectDatabase).toHaveBeenCalledOnce();
+
   expect(disconnectDatabase).toHaveBeenCalledOnce();
 });
 
@@ -152,8 +173,11 @@ it('cleans up signal listeners when connecting to the database fails', async ():
   await expect(runLaunchWorker()).rejects.toBe(failure);
 
   expect(runBaseWorker).not.toHaveBeenCalled();
+
   expect(runNetworkWorker).not.toHaveBeenCalled();
+
   expect(disconnectDatabase).toHaveBeenCalledOnce();
+
   expect(process.listenerCount('SIGTERM')).toBe(initialListeners);
 });
 
@@ -174,5 +198,6 @@ it('aborts and drains Base when a Stellar network fails', async (): Promise<void
   await expect(runLaunchWorker()).rejects.toBe(failure);
 
   expect(sharedSignal?.aborted).toBe(true);
+
   expect(disconnectDatabase).toHaveBeenCalledOnce();
 });
