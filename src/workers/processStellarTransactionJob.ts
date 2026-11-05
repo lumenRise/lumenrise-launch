@@ -4,16 +4,42 @@ import log from '../logger';
 import StellarTransactionJob from '../models/StellarTransactionJob';
 import processStellarTransaction from '../services/stellar/processStellarTransaction';
 
+const maxAttempts = 20;
+const maxNotFoundAttempts = 6;
+
 const processStellarTransactionJob = async (
   network: 'testnet' | 'public',
   jobId?: string,
 ): Promise<void> => {
   const now = new Date();
+  const identity = { network, ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}) };
+
+  await StellarTransactionJob.updateMany(
+    {
+      ...identity,
+      $and: [
+        {
+          $or: [
+            { attempts: { $gte: maxAttempts } },
+            { notFoundAttempts: { $gte: maxNotFoundAttempts } },
+          ],
+        },
+        {
+          $or: [
+            { status: 'queued', scheduledAt: { $lte: now } },
+            { status: 'running', leaseUntil: { $lte: now } },
+          ],
+        },
+      ],
+    },
+    { $set: { status: 'failed', failureStatus: 400, leaseUntil: null } },
+  );
 
   const job = await StellarTransactionJob.findOneAndUpdate(
     {
-      network,
-      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
+      ...identity,
+      attempts: { $lt: maxAttempts },
+      notFoundAttempts: { $not: { $gte: maxNotFoundAttempts } },
       $or: [
         { status: 'queued', scheduledAt: { $lte: now } },
         { status: 'running', leaseUntil: { $lte: now } },
@@ -53,17 +79,28 @@ const processStellarTransactionJob = async (
     const invalid =
       conflict || (error instanceof Error && error.name === 'InvalidStellarTransaction');
 
+    const notFound = error instanceof Error && error.name === 'StellarTransactionNotFound';
+    const notFoundAttempts = (job.notFoundAttempts ?? 0) + (notFound ? 1 : 0);
+    const retryAttempt = notFound ? notFoundAttempts : job.attempts;
+
+    const failed =
+      invalid || job.attempts >= maxAttempts || notFoundAttempts >= maxNotFoundAttempts;
+
     await StellarTransactionJob.updateOne(owner, {
       $set: {
-        status: invalid ? 'failed' : 'queued',
+        status: failed ? 'failed' : 'queued',
+        notFoundAttempts,
         failureStatus: conflict ? 409 : 400,
-        scheduledAt: new Date(Date.now() + Math.min(60_000, 2000 * 2 ** Math.min(job.attempts, 5))),
+        scheduledAt: new Date(Date.now() + Math.min(60_000, 2000 * 2 ** Math.min(retryAttempt, 5))),
         leaseUntil: null,
         lastError: message.slice(0, 2000),
       },
     });
 
-    log.warn({ error, jobId: job._id }, 'Stellar transaction processing deferred');
+    log.warn(
+      { err: error, jobId: job._id, attempts: job.attempts, notFoundAttempts },
+      failed ? 'Stellar transaction processing failed' : 'Stellar transaction processing deferred',
+    );
   }
 };
 

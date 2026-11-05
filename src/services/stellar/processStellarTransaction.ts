@@ -34,7 +34,11 @@ const processStellarTransaction = async (
     const transaction = await server.getTransaction(job.transactionHash);
 
     if (transaction.status === 'NOT_FOUND') {
-      throw new Error('Transaction not available yet');
+      const error = new Error('Transaction not available yet');
+
+      error.name = 'StellarTransactionNotFound';
+
+      throw error;
     }
 
     if (transaction.txHash.toLowerCase() !== job.transactionHash) {

@@ -7,6 +7,7 @@ interface StellarTransactionJob {
   scheduledAt: Date;
   leaseUntil: Date | null;
   attempts: number;
+  notFoundAttempts?: number;
   observedBlock?: number;
   failureStatus?: number;
   lastError: string | null;

@@ -402,5 +402,201 @@ describe.runIf(Boolean(process.env.LUMENRISE_TEST_DB_URI))(
         failureStatus: 409,
       });
     });
+
+    it.each([
+      [0, 4000],
+      [1, 8000],
+      [2, 16000],
+      [3, 32000],
+      [4, 60000],
+      [18, 60000],
+    ])(
+      'schedules retry after %i prior attempts with a %i ms delay',
+      async (attempts, delay): Promise<void> => {
+        const queued = await StellarTransactionJob.create({
+          ...job,
+          attempts,
+          notFoundAttempts: Math.min(attempts, 4),
+        });
+
+        const started = Date.now();
+
+        server.getTransaction.mockResolvedValueOnce({ status: 'NOT_FOUND' });
+
+        await processStellarTransactionJob('testnet', queued.id);
+
+        const saved = await StellarTransactionJob.findById(queued.id);
+
+        expect(saved?.status).toBe('queued');
+
+        expect(saved?.attempts).toBe(attempts + 1);
+
+        expect(saved?.scheduledAt.getTime()).toBeGreaterThanOrEqual(started + delay);
+
+        expect(saved?.scheduledAt.getTime()).toBeLessThanOrEqual(Date.now() + delay);
+      },
+    );
+
+    it('stops after six NOT_FOUND responses without another RPC read', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({
+        ...job,
+        attempts: 5,
+        notFoundAttempts: 5,
+      });
+
+      server.getTransaction.mockResolvedValueOnce({ status: 'NOT_FOUND' });
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      const saved = await StellarTransactionJob.findById(queued.id);
+
+      expect(saved?.status).toBe('failed');
+
+      expect(saved?.attempts).toBe(6);
+
+      expect(saved?.notFoundAttempts).toBe(6);
+
+      expect(saved?.lastError).toBe('Transaction not available yet');
+
+      expect(saved?.leaseUntil).toBeNull();
+
+      expect(server.getTransaction).toHaveBeenCalledOnce();
+    });
+
+    it('allows successful processing on the final permitted attempt', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({ ...job, attempts: 19 });
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect((await StellarTransactionJob.findById(queued.id))?.status).toBe('completed');
+
+      expect((await StellarTransactionJob.findById(queued.id))?.attempts).toBe(20);
+
+      expect(server.getTransaction).toHaveBeenCalledOnce();
+    });
+
+    it.each(['queued', 'running'])(
+      'retires exhausted %s jobs without an RPC read',
+      async (status): Promise<void> => {
+        const queued = await StellarTransactionJob.create({
+          ...job,
+          status,
+          attempts: status === 'queued' ? 886 : 20,
+          leaseUntil: status === 'running' ? new Date(0) : null,
+          lastError: 'Transaction not available yet',
+        });
+
+        await processStellarTransactionJob('testnet');
+
+        const saved = await StellarTransactionJob.findById(queued.id);
+
+        expect(saved?.status).toBe('failed');
+
+        expect(saved?.attempts).toBe(status === 'queued' ? 886 : 20);
+
+        expect(saved?.lastError).toBe('Transaction not available yet');
+
+        expect(server.getTransaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not retire a final attempt with an active lease', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({
+        ...job,
+        status: 'running',
+        attempts: 20,
+        leaseUntil: new Date(Date.now() + 300000),
+      });
+
+      await processStellarTransactionJob('testnet');
+
+      expect((await StellarTransactionJob.findById(queued.id))?.status).toBe('running');
+
+      expect(server.getTransaction).not.toHaveBeenCalled();
+    });
+
+    it('keeps RPC failures outside the six NOT_FOUND responses across retries', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({
+        ...job,
+        attempts: 15,
+        notFoundAttempts: 4,
+      });
+
+      server.getTransaction.mockRejectedValueOnce(new Error('RPC request timed out'));
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect(await StellarTransactionJob.findById(queued.id).lean()).toMatchObject({
+        status: 'queued',
+        attempts: 16,
+        notFoundAttempts: 4,
+      });
+
+      await StellarTransactionJob.updateOne(
+        { _id: queued._id },
+        { $set: { scheduledAt: new Date(0) } },
+      );
+
+      server.getTransaction.mockResolvedValueOnce({ status: 'NOT_FOUND' });
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect(await StellarTransactionJob.findById(queued.id).lean()).toMatchObject({
+        status: 'queued',
+        attempts: 17,
+        notFoundAttempts: 5,
+      });
+
+      await StellarTransactionJob.updateOne(
+        { _id: queued._id },
+        { $set: { scheduledAt: new Date(0) } },
+      );
+
+      server.getTransaction.mockResolvedValueOnce({ status: 'NOT_FOUND' });
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect(await StellarTransactionJob.findById(queued.id).lean()).toMatchObject({
+        status: 'failed',
+        attempts: 18,
+        notFoundAttempts: 6,
+      });
+    });
+
+    it('retains the general twenty-attempt cap for RPC connection failures', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({
+        ...job,
+        attempts: 19,
+        notFoundAttempts: 0,
+      });
+
+      server.getTransaction.mockRejectedValueOnce(new Error('Connection refused'));
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect(await StellarTransactionJob.findById(queued.id).lean()).toMatchObject({
+        status: 'failed',
+        attempts: 20,
+        notFoundAttempts: 0,
+      });
+    });
+
+    it('retires an exhausted NOT_FOUND job with an expired lease without reading RPC', async (): Promise<void> => {
+      const queued = await StellarTransactionJob.create({
+        ...job,
+        status: 'running',
+        attempts: 6,
+        notFoundAttempts: 6,
+        leaseUntil: new Date(0),
+      });
+
+      await processStellarTransactionJob('testnet', queued.id);
+
+      expect((await StellarTransactionJob.findById(queued.id))?.status).toBe('failed');
+
+      expect(server.getTransaction).not.toHaveBeenCalled();
+    });
   },
 );
