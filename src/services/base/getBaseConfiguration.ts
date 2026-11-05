@@ -37,7 +37,6 @@ const getBaseConfiguration = (network: 'testnet' | 'public'): BaseConfiguration 
 
   return {
     network,
-    chainId: network === 'testnet' ? 84532 : 8453,
     rpcUrl,
     factoryAddress: factory.toLowerCase() as BaseConfiguration['factoryAddress'],
     deploymentBlock: BigInt(start),

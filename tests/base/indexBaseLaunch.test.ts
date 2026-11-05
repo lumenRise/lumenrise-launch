@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Launch from '../../src/models/Launch';
 import LaunchName from '../../src/models/LaunchName';
 import TokenImage from '../../src/models/TokenImage';
+import LaunchPriceSample from '../../src/models/LaunchPriceSample';
 import readBaseLaunch from '../../src/services/base/readBaseLaunch';
 import type { BaseEventContext } from '../../src/types/base/launch';
 import createBaseCreationLog from '../helpers/createBaseCreationLog';
@@ -26,6 +27,10 @@ const context = {
 
 beforeEach((): void => {
   vi.clearAllMocks();
+
+  vi.spyOn(Launch, 'findOne').mockReturnValue({
+    session: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
+  } as never);
 
   vi.mocked(context.client.readContract).mockResolvedValue(address);
 
@@ -56,6 +61,8 @@ beforeEach((): void => {
   } as never);
 
   vi.spyOn(LaunchName, 'findOneAndUpdate').mockResolvedValue({} as never);
+
+  vi.spyOn(LaunchPriceSample, 'updateOne').mockResolvedValue({} as never);
 
   vi.spyOn(Launch, 'updateOne').mockResolvedValue({} as never);
 

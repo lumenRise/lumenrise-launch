@@ -14,12 +14,17 @@ import processBaseBlock from '../../src/services/base/processBaseBlock';
 import refreshBaseMarket from '../../src/services/base/refreshBaseMarket';
 import { pool, asset, pair, curve, trader } from '../helpers/basePoolFixture';
 
+vi.mock('../../src/services/base/refreshRecordedHoldings', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
+
 vi.mock('../../src/services/base/readBaseLaunch', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/services/base/refreshBaseMarket', () => ({ default: vi.fn() }));
 
 const swap = createBaseSwapLog();
 const event = { ...createBaseLog(), transactionIndex: swap.transactionIndex };
+
 const launch = {
   contractId: curve,
   asset,
@@ -47,24 +52,38 @@ const context = {
 beforeEach((): void => {
   vi.clearAllMocks();
 
+  vi.spyOn(LaunchTrade, 'exists').mockReturnValue({
+    session: vi.fn().mockResolvedValue(null),
+  } as never);
+
   vi.spyOn(mongoose.connection, 'transaction').mockImplementation(async (operation) =>
     operation({} as never),
   );
+
   vi.spyOn(BaseCursor, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+
   vi.spyOn(BaseCheckpoint, 'findOne').mockReturnValue({
     session: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
   } as never);
+
   vi.spyOn(BaseCheckpoint, 'updateOne').mockResolvedValue({} as never);
+
   vi.spyOn(Launch, 'findOne').mockReturnValue({
     session: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(launch) }),
   } as never);
+
   vi.spyOn(LaunchTrade, 'updateOne').mockResolvedValue({ upsertedCount: 1 } as never);
+
   vi.mocked(readBaseLaunch).mockResolvedValue({ pool } as never);
+
   vi.mocked(context.client.getBlock).mockResolvedValue({ hash: swap.blockHash } as never);
+
   vi.mocked(context.client.readContract).mockResolvedValue({ graduated: true } as never);
+
   vi.mocked(context.client.getLogs).mockResolvedValue([
     { transactionIndex: swap.transactionIndex },
   ] as never);
+
   vi.mocked(context.client.getTransactionReceipt).mockResolvedValue({
     status: 'success',
     transactionHash: swap.transactionHash,
@@ -84,6 +103,7 @@ it('records the final curve buy and same-block pool swap using the same format a
     topics: [toEventSelector('Graduated(uint256,uint256)')],
     logIndex: 2,
   };
+
   const input = {
     context,
     number: 20n,
@@ -93,20 +113,24 @@ it('records the final curve buy and same-block pool swap using the same format a
   };
 
   await processBaseBlock(input);
+
   await processBaseBlock(input);
 
   const writes = vi.mocked(LaunchTrade.updateOne).mock.calls;
 
   expect(writes).toHaveLength(4);
+
   expect(writes[0]![0]).toEqual(writes[2]![0]);
+
   expect(writes[1]![0]).toEqual(writes[3]![0]);
+
   expect(writes[1]![1]).toMatchObject({
     $setOnInsert: { contractId: curve, trader, side: 'buy', grossAmount: '2000000' },
   });
+
   expect(vi.mocked(refreshBaseMarket).mock.calls[0]![1]).toBe(curve);
-  expect(vi.mocked(refreshBaseMarket).mock.invocationCallOrder[0]).toBeLessThan(
-    vi.mocked(LaunchTrade.updateOne).mock.invocationCallOrder[0]!,
-  );
+
+  expect(readBaseLaunch).not.toHaveBeenCalled();
 });
 
 it('ignores Swap events emitted outside the configured PoolManager', async (): Promise<void> => {

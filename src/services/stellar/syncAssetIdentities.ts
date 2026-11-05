@@ -4,7 +4,6 @@ import Launch from '../../models/Launch';
 import AssetIdentity from '../../models/AssetIdentity';
 import resolveAssetIdentity from './resolveAssetIdentity';
 import type { Configuration } from '../../types/configuration';
-import checkHorizonAvailability from './checkHorizonAvailability';
 
 const syncAssetIdentities = async (configuration: Configuration): Promise<number> => {
   const assets = await Launch.distinct('asset', {
@@ -42,14 +41,6 @@ const syncAssetIdentities = async (configuration: Configuration): Promise<number
     allowHttp: configuration.rpcUrl.startsWith('http:'),
     timeout: 15_000,
   });
-
-  const remote = await server.getNetwork();
-
-  if (remote.passphrase !== configuration.networkPassphrase) {
-    throw new Error('Stellar asset identity RPC network mismatch');
-  }
-
-  await checkHorizonAvailability(configuration.horizonUrl, configuration.networkPassphrase);
 
   const source = new Account(contract.NULL_ACCOUNT, '0');
 

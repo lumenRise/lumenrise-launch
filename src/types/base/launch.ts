@@ -17,23 +17,20 @@ interface BaseBlockInput {
   timestamp: bigint;
   advance?: boolean;
   refreshDue?: boolean;
-  mode?: 'history' | 'live';
+  mode?: BaseScanMode;
+  verifiedBlock?: boolean;
+  coverageFrom?: number;
   expectedNextBlock?: string;
 }
 
-interface BaseRecoveredCreation {
-  asset: Address;
-  event: Log;
-  number: bigint;
-  hash: string;
-  timestamp: bigint;
-}
+type BaseScanMode = 'history' | 'live' | 'pool';
 
-type BaseScanMode = 'history' | 'live';
+type BaseLoopMode = BaseScanMode | 'head';
 
 interface BaseEventContext extends BaseContext {
   session: ClientSession;
   events?: BaseIndexedEvent[];
+  coverageFrom?: number;
 }
 
 interface BaseIndexedEvent {
@@ -59,8 +56,8 @@ interface BaseLaunchSnapshot {
 }
 
 export type {
+  BaseLoopMode,
   BaseScanMode,
-  BaseRecoveredCreation,
   BaseIndexedEvent,
   BaseLaunchSnapshot,
   BaseWriteContext,

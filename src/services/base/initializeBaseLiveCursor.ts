@@ -6,9 +6,10 @@ import type { BaseConfiguration } from '../../types/base/configuration';
 
 const initializeBaseLiveCursor = async (
   network: BaseConfiguration['network'],
+  observedHead: bigint,
 ): Promise<boolean> => {
   const context = await getBaseContext(network);
-  const head = await context.client.getBlockNumber();
+  const head = observedHead;
   const writer = await acquireBaseLease(context);
 
   if (!writer) {

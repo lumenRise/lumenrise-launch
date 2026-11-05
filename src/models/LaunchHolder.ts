@@ -17,6 +17,8 @@ const schema = new Schema<LaunchHolderRecord>(
     asset: { type: String, required: true },
     balance: { type: String, required: true, match: /^(0|[1-9]\d{0,38})$/ },
     balanceSort: { type: String, required: true },
+    netRecordedAmount: { type: String },
+    balanceSource: { type: String },
     observedBlock: { type: Number },
     observedAt: { type: Date, required: true },
   },

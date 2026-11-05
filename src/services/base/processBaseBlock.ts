@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import type { Log } from 'viem';
-import { decodeEventLog, toEventSelector } from 'viem';
+import { toEventSelector } from 'viem';
 
 import log from '../../logger';
 import Launch from '../../models/Launch';
@@ -9,11 +9,12 @@ import indexBaseLaunch from './indexBaseLaunch';
 import BaseCursor from '../../models/BaseCursor';
 import LaunchTrade from '../../models/LaunchTrade';
 import refreshBaseMarket from './refreshBaseMarket';
-import tokenAbi from '../../constants/base/tokenAbi';
 import findBaseSwapLaunch from './findBaseSwapLaunch';
 import BaseCheckpoint from '../../models/BaseCheckpoint';
 import type { BaseBlockInput } from '../../types/base/launch';
+import refreshRecordedHoldings from './refreshRecordedHoldings';
 import type { BaseIndexedEvent } from '../../types/base/launch';
+import refreshBaseMarketIfNeeded from './refreshBaseMarketIfNeeded';
 import uniswapDeployments from '../../constants/base/uniswapDeployments';
 import type { LaunchData as LaunchRecord } from '../../types/launch/model';
 
@@ -30,10 +31,12 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     throw new Error('Base log position differs from its block');
   }
 
-  const canonical = await context.client.getBlock({ blockNumber: number });
+  if (!input.verifiedBlock) {
+    const canonical = await context.client.getBlock({ blockNumber: number });
 
-  if (canonical.hash !== hash) {
-    throw new Error('Base block changed before ingestion; retry after reconciliation');
+    if (canonical.hash !== hash) {
+      throw new Error('Base block changed before ingestion; retry after reconciliation');
+    }
   }
 
   const indexed = await mongoose.connection.transaction(async (session) => {
@@ -57,7 +60,7 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
       throw new Error('Base block conflicts with stored checkpoint');
     }
 
-    const eventContext = { ...context, session, events };
+    const eventContext = { ...context, session, events, coverageFrom: input.coverageFrom };
 
     const logs = [...input.logs].sort(
       (left, right): number => (left.logIndex ?? -1) - (right.logIndex ?? -1),
@@ -92,8 +95,14 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
         .session(session)
         .lean();
 
-      if (launch) {
+      if (launch && (!launch.pool || launch.stateAsOfLedger < Number(number))) {
         await refreshBaseMarket(eventContext, launch.contractId, number, timestamp, []);
+
+        await Launch.updateOne(
+          { chain: 'base', network: configuration.network, contractId: launch.contractId },
+          { $set: { graduationBlock: Number(number), graduationLogIndex: event.logIndex } },
+          { session },
+        );
       }
     }
 
@@ -125,44 +134,6 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     const tradeGroups = new Map<string, { launch: LaunchRecord; logs: Log[] }>();
 
     for (const log of logs) {
-      if (log.topics[0] === toEventSelector('Transfer(address,address,uint256)')) {
-        const launches = await Launch.find({
-          chain: 'base',
-          network: configuration.network,
-          asset: log.address.toLowerCase(),
-          factoryContractId: configuration.factoryAddress,
-          creationLedger: { $lte: Number(number) },
-        })
-          .session(session)
-          .lean();
-
-        if (launches.length === 0) {
-          continue;
-        }
-
-        const { args } = decodeEventLog({
-          abi: tokenAbi,
-          data: log.data,
-          topics: log.topics,
-          eventName: 'Transfer',
-          strict: true,
-        });
-
-        for (const launch of launches) {
-          const addresses = traders.get(launch.contractId) ?? [];
-
-          for (const address of [args.from, args.to]) {
-            if (!/^0x0{40}$/i.test(address) && address.toLowerCase() !== launch.contractId) {
-              addresses.push(address.toLowerCase());
-            }
-          }
-
-          traders.set(launch.contractId, addresses);
-        }
-
-        continue;
-      }
-
       const isSwap =
         log.address.toLowerCase() === uniswapDeployments[configuration.network].poolManager &&
         log.topics[0] ===
@@ -196,6 +167,17 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
 
       if (!launch) {
         // Ignore identically named events from contracts outside our factory registry.
+        continue;
+      }
+
+      const recorded = await LaunchTrade.exists({
+        chain: 'base',
+        network: configuration.network,
+        transactionHash: log.transactionHash?.toLowerCase(),
+        operationIndex: log.logIndex,
+      }).session(session);
+
+      if (recorded) {
         continue;
       }
 
@@ -242,7 +224,11 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
     }
 
     for (const [contractId, addresses] of traders) {
-      await refreshBaseMarket(eventContext, contractId, number, timestamp, addresses);
+      await refreshBaseMarketIfNeeded(eventContext, contractId, number, timestamp, addresses);
+
+      if (addresses.length > 0) {
+        await refreshRecordedHoldings(eventContext, contractId);
+      }
     }
 
     await BaseCheckpoint.updateOne(

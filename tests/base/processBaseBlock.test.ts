@@ -13,6 +13,8 @@ import refreshBaseMarket from '../../src/services/base/refreshBaseMarket';
 
 vi.mock('../../src/services/base/refreshBaseMarket', () => ({ default: vi.fn() }));
 
+vi.mock('../../src/services/base/refreshRecordedHoldings', () => ({ default: vi.fn() }));
+
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn() } }));
 
 const event = createBaseLog();
@@ -29,6 +31,10 @@ const context = {
 
 beforeEach((): void => {
   vi.clearAllMocks();
+
+  vi.spyOn(LaunchTrade, 'exists').mockReturnValue({
+    session: vi.fn().mockResolvedValue(null),
+  } as never);
 
   vi.mocked(context.client.readContract).mockResolvedValue({ graduated: false } as never);
 
@@ -150,6 +156,7 @@ it('logs a newly committed trade once and stays silent on replay', async (): Pro
   };
 
   await processBaseBlock(input);
+
   await processBaseBlock(input);
 
   expect(log.info).toHaveBeenCalledTimes(1);

@@ -5,6 +5,10 @@ import getBaseNetworks from '../../src/services/base/getBaseNetworks';
 import runBaseScanLoop from '../../src/services/base/runBaseScanLoop';
 import getBaseConfiguration from '../../src/services/base/getBaseConfiguration';
 
+vi.mock('../../src/services/base/startBaseTransactionWorker', () => ({
+  default: vi.fn(async () => ({ stop: vi.fn() })),
+}));
+
 vi.mock('../../src/logger', () => ({ default: { info: vi.fn(), error: vi.fn() } }));
 
 vi.mock('../../src/services/base/getBaseConfiguration', () => ({ default: vi.fn() }));
@@ -40,11 +44,14 @@ it.each(['both', 'public', 'testnet'] as const)(
     await runBaseWorker(controller.signal, networks);
 
     expect(getBaseConfiguration).toHaveBeenCalledWith('testnet');
+
     expect(getBaseConfiguration).toHaveBeenCalledWith('public');
-    expect(runBaseScanLoop).toHaveBeenCalledTimes(expectedNetworks.length * 2);
+
+    expect(runBaseScanLoop).toHaveBeenCalledTimes(expectedNetworks.length * 4);
 
     for (const network of expectedNetworks) {
       expect(runBaseScanLoop).toHaveBeenCalledWith(controller.signal, network, 'live');
+
       expect(runBaseScanLoop).toHaveBeenCalledWith(controller.signal, network, 'history');
     }
   },

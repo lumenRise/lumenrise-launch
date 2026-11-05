@@ -1,14 +1,11 @@
 import log from '../logger';
 import Launch from '../models/Launch';
 import claimLaunchHolderJob from './claimLaunchHolderJob';
-import type { HolderBalanceReader } from '../types/launch/holder';
+import type { HolderJobReader } from '../types/launch/holder';
 import LaunchHolderRefreshJob from '../models/LaunchHolderRefreshJob';
 import refreshLaunchHolder from '../services/launch/refreshLaunchHolder';
 
-const processLaunchHolderJob = async (
-  reader: HolderBalanceReader,
-  jobId?: string,
-): Promise<void> => {
+const processLaunchHolderJob = async (reader: HolderJobReader, jobId?: string): Promise<void> => {
   const job = await claimLaunchHolderJob(reader.network, jobId);
 
   if (!job) {
@@ -35,7 +32,7 @@ const processLaunchHolderJob = async (
       throw new Error('Holder refresh launch or token is not indexed');
     }
 
-    await refreshLaunchHolder(reader, identity, launch.asset, job.address);
+    await refreshLaunchHolder(reader, identity);
 
     await LaunchHolderRefreshJob.updateOne(owner, {
       $set: { status: 'completed', leaseUntil: null, lastError: null },

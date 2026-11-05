@@ -8,14 +8,15 @@ interface LaunchHolderRecord {
   asset: string;
   balance: string;
   balanceSort: string;
+  netRecordedAmount?: string;
+  balanceSource?: string;
   observedBlock?: number;
   observedAt: Date;
 }
 
-interface HolderBalanceReader {
+interface HolderJobReader {
   chain?: Chain;
   network: 'testnet' | 'public';
-  tokenBalance(asset: string, address: string): Promise<unknown>;
 }
 
-export type { LaunchHolderRecord, HolderBalanceReader };
+export type { LaunchHolderRecord, HolderJobReader };

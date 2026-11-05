@@ -1,4 +1,5 @@
 import log from '../../logger';
+import Launch from '../../models/Launch';
 import LaunchPriceSample from '../../models/LaunchPriceSample';
 import parseTradeInteger from '../../utils/launch/parseTradeInteger';
 
@@ -25,6 +26,8 @@ const recordLaunchPrice = async (
     .lean();
 
   if (previous && (previous.ledger >= read.ledger || previous.price === price.toString())) {
+    await Launch.updateOne(identity, { $max: { priceAsOfLedger: read.ledger } });
+
     return;
   }
 
@@ -69,6 +72,8 @@ const recordLaunchPrice = async (
       throw error;
     }
   }
+
+  await Launch.updateOne(identity, { $max: { priceAsOfLedger: read.ledger } });
 };
 
 export default recordLaunchPrice;

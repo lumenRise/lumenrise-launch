@@ -10,8 +10,15 @@ import LaunchHolder from '../../src/models/LaunchHolder';
 import BaseCheckpoint from '../../src/models/BaseCheckpoint';
 import LaunchPriceSample from '../../src/models/LaunchPriceSample';
 import type { BaseWriteContext } from '../../src/types/base/launch';
+import BaseTransactionJob from '../../src/models/BaseTransactionJob';
 import refreshBaseMarket from '../../src/services/base/refreshBaseMarket';
 import reconcileBaseChain from '../../src/services/base/reconcileBaseChain';
+
+vi.mock('../../src/services/base/refreshRecordedHoldings', () => ({ default: vi.fn() }));
+
+vi.mock('../../src/services/base/readBaseFinalized', () => ({
+  default: (context: BaseWriteContext) => context.client.getBlock({ blockTag: 'finalized' }),
+}));
 
 vi.mock('../../src/logger', () => ({ default: { warn: vi.fn() } }));
 
@@ -86,6 +93,10 @@ beforeEach((): void => {
     session: vi.fn().mockResolvedValue(['holder']),
   } as never);
 
+  vi.spyOn(BaseTransactionJob, 'updateMany').mockResolvedValue({} as never);
+
+  vi.spyOn(Launch, 'updateOne').mockResolvedValue({} as never);
+
   vi.spyOn(Launch, 'deleteMany').mockResolvedValue({} as never);
 
   vi.spyOn(LaunchTrade, 'deleteMany').mockResolvedValue({} as never);
@@ -139,7 +150,7 @@ it('atomically rewinds orphan trades, launches, prices, images and balances for 
     'survivor',
     10n,
     100n,
-    ['holder'],
+    [],
     true,
   );
 
@@ -150,11 +161,13 @@ it('atomically rewinds orphan trades, launches, prices, images and balances for 
     }),
     { session },
   );
+
   expect(Launch.distinct).toHaveBeenCalledWith('contractId', {
     chain: 'base',
     network: 'testnet',
     factoryContractId: 'factory',
   });
+
   expect(Launch.find).toHaveBeenLastCalledWith({
     chain: 'base',
     network: 'testnet',
@@ -187,6 +200,7 @@ it('finalizes canonical live checkpoints without advancing the historical cursor
     { network: 'testnet', factoryAddress: 'factory', finalized: false, blockNumber: { $lte: 20 } },
     { $set: { finalized: true } },
   );
+
   expect(BaseCursor.updateOne).not.toHaveBeenCalled();
 });
 
@@ -196,10 +210,27 @@ it('preserves historical gaps when recovery uses a finalized checkpoint ahead of
   } as never);
 
   expect(await reconcileBaseChain(context)).toBe(true);
+
   expect(BaseCursor.updateOne).toHaveBeenLastCalledWith(
     expect.objectContaining({ leaseOwner: 'worker-one' }),
     expect.objectContaining({
       $set: expect.objectContaining({ nextBlock: '5', nextLiveBlock: '11' }),
+    }),
+    { session },
+  );
+});
+
+it('preserves a factory scan gap when a finalized pool checkpoint is ahead of it', async (): Promise<void> => {
+  vi.mocked(BaseCursor.findOne).mockReturnValue({
+    lean: async () => ({ nextBlock: '5', nextLiveBlock: '7', previousBlockHash: null }),
+  } as never);
+
+  expect(await reconcileBaseChain(context)).toBe(true);
+
+  expect(BaseCursor.updateOne).toHaveBeenLastCalledWith(
+    expect.objectContaining({ leaseOwner: 'worker-one' }),
+    expect.objectContaining({
+      $set: expect.objectContaining({ nextBlock: '5', nextLiveBlock: '7' }),
     }),
     { session },
   );

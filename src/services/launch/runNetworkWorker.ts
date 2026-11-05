@@ -10,15 +10,17 @@ import startLaunchHolderWorker from './startLaunchHolderWorker';
 import syncAssetIdentities from '../stellar/syncAssetIdentities';
 import finalizeTokenImages from '../tokenImage/finalizeTokenImages';
 import type { ScheduledTask } from '../../types/launch/scheduledTask';
+import rebuildStellarHoldings from '../stellar/rebuildStellarHoldings';
 import markTokenImagesForCleanup from '../tokenImage/markTokenImagesForCleanup';
 import createLaunchReaderWithRetry from '../stellar/createLaunchReaderWithRetry';
+import startStellarTransactionWorker from '../stellar/startStellarTransactionWorker';
 
 const runNetworkWorker = async (
   configuration: Configuration,
   signal: AbortSignal,
 ): Promise<void> => {
   const tasks: ScheduledTask[] = [];
-
+  let transactionWorker: { stop: () => Promise<void> } | null = null;
   let holderWorker: { stop: () => Promise<void> } | null = null;
 
   try {
@@ -27,6 +29,10 @@ const runNetworkWorker = async (
     if (!reader) {
       return;
     }
+
+    await rebuildStellarHoldings(configuration.network);
+
+    transactionWorker = await startStellarTransactionWorker(configuration.network);
 
     const store = createLaunchStore(configuration);
 
@@ -66,8 +72,8 @@ const runNetworkWorker = async (
 
     const factoryTask = createScheduledTask({
       name: 'factory sync',
-      intervalMs: 30_000,
-      retryMs: 30_000,
+      intervalMs: 60_000,
+      retryMs: 60_000,
       run: async (): Promise<void> => {
         const added = await syncFactory(reader, store, configuration, reconcileFactory);
 
@@ -126,6 +132,9 @@ const runNetworkWorker = async (
     }
   } finally {
     await Promise.all(tasks.map((task: ScheduledTask): Promise<void> => task.stop()));
+
+    await transactionWorker?.stop();
+
     await holderWorker?.stop();
   }
 };

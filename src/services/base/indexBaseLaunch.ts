@@ -7,6 +7,7 @@ import LaunchName from '../../models/LaunchName';
 import TokenImage from '../../models/TokenImage';
 import factoryAbi from '../../constants/base/factoryAbi';
 import toLaunchSlug from '../../utils/launch/toLaunchSlug';
+import LaunchPriceSample from '../../models/LaunchPriceSample';
 import type { BaseEventContext } from '../../types/base/launch';
 import claimIndexedLaunchName from '../launch/claimIndexedLaunchName';
 
@@ -30,6 +31,19 @@ const indexBaseLaunch = async (
     eventName: 'LaunchCreated',
     strict: true,
   });
+
+  const existing = await Launch.findOne({
+    chain: 'base',
+    network: context.configuration.network,
+    contractId: args.curve.toLowerCase(),
+    factoryContractId: context.configuration.factoryAddress,
+  })
+    .session(context.session)
+    .lean();
+
+  if (existing) {
+    return null;
+  }
 
   const registered = await context.client.readContract({
     address: context.configuration.factoryAddress,
@@ -144,13 +158,31 @@ const indexBaseLaunch = async (
         pool: read.pool ?? null,
         graduationState: read.graduationState ?? null,
         asOfLedger: Number(log.blockNumber),
+        tradeCoverageFrom: context.coverageFrom ?? Number(log.blockNumber),
         stateAsOfLedger: Number(log.blockNumber),
         observedAt: new Date(),
         stateObservedAt: new Date(),
         createdAt: new Date(Number(timestamp) * 1000),
         creationLedger: Number(log.blockNumber),
-        creationTransactionHash: log.transactionHash,
-        nextStatePollAt: null,
+        creationTransactionHash: log.transactionHash?.toLowerCase(),
+        nextStatePollAt:
+          context.coverageFrom !== undefined && context.coverageFrom > Number(log.blockNumber) + 1
+            ? null
+            : new Date(Date.now() + 900_000),
+      },
+    },
+    { upsert: true, session: context.session },
+  );
+
+  await LaunchPriceSample.updateOne(
+    { ...identity, observationKey: log.blockNumber.toString() },
+    {
+      $setOnInsert: {
+        bucket: new Date(Number(timestamp) * 1000),
+        sampledAt: new Date(Number(timestamp) * 1000),
+        ledger: Number(log.blockNumber),
+        price: read.price.toString(),
+        priceSort: read.price.toString().padStart(78, '0'),
       },
     },
     { upsert: true, session: context.session },

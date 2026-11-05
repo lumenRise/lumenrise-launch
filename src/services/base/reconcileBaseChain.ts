@@ -7,15 +7,23 @@ import LaunchName from '../../models/LaunchName';
 import TokenImage from '../../models/TokenImage';
 import LaunchTrade from '../../models/LaunchTrade';
 import refreshBaseMarket from './refreshBaseMarket';
+import readBaseFinalized from './readBaseFinalized';
 import LaunchHolder from '../../models/LaunchHolder';
 import BaseCheckpoint from '../../models/BaseCheckpoint';
 import LaunchPriceSample from '../../models/LaunchPriceSample';
+import refreshRecordedHoldings from './refreshRecordedHoldings';
 import type { BaseWriteContext } from '../../types/base/launch';
+import BaseTransactionJob from '../../models/BaseTransactionJob';
 
 const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> => {
   const { configuration, client, leaseOwner } = context;
   const key = { network: configuration.network, factoryAddress: configuration.factoryAddress };
-  const finalized = await client.getBlock({ blockTag: 'finalized' });
+  const finalized = await readBaseFinalized(context);
+
+  if (finalized.number === null) {
+    throw new Error('Finalized block has no number');
+  }
+
   const cursor = await BaseCursor.findOne(key).lean();
 
   const checkpoints = await BaseCheckpoint.find({ ...key, finalized: false })
@@ -73,11 +81,8 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
       }
 
       const scope = { chain: 'base' as const, network: configuration.network };
-
       const factoryScope = { ...scope, factoryContractId: configuration.factoryAddress };
-
       const ownedContracts = await Launch.distinct('contractId', factoryScope).session(session);
-
       const marketScope = { ...scope, contractId: { $in: ownedContracts } };
 
       const orphaned = await Launch.find({
@@ -112,6 +117,8 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
 
       await Launch.deleteMany({ ...scope, contractId: { $in: contractIds } }, { session });
 
+      await LaunchHolder.deleteMany({ ...scope, contractId: { $in: contractIds } }, { session });
+
       await LaunchTrade.deleteMany(
         { ...marketScope, ledger: { $gt: Number(boundary) } },
         { session },
@@ -122,8 +129,6 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
         { session },
       );
 
-      await LaunchHolder.deleteMany({ ...scope, contractId: { $in: contractIds } }, { session });
-
       const survivors = await Launch.find(factoryScope).session(session).lean();
 
       for (const launch of survivors) {
@@ -131,20 +136,33 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
           throw new Error('Base launch predates its configured deployment block');
         }
 
-        const holders = await LaunchHolder.distinct('address', {
-          ...scope,
-          contractId: launch.contractId,
-        }).session(session);
-
         await refreshBaseMarket(
           { ...context, session },
           launch.contractId,
           boundary,
           stableBlock.timestamp,
-          holders,
+          [],
           true,
         );
+
+        await Launch.updateOne(
+          { ...factoryScope, contractId: launch.contractId },
+          { $set: { poolNextBlock: null } },
+          { session },
+        );
+
+        await refreshRecordedHoldings({ ...context, session }, launch.contractId);
       }
+
+      await BaseTransactionJob.updateMany(
+        {
+          network: configuration.network,
+          status: 'completed',
+          observedBlock: { $gt: Number(boundary) },
+        },
+        { $set: { status: 'queued', result: null, scheduledAt: new Date(), leaseUntil: null } },
+        { session },
+      );
 
       await BaseCheckpoint.deleteMany(
         { ...key, blockNumber: { $gt: Number(boundary) } },
@@ -159,7 +177,11 @@ const reconcileBaseChain = async (context: BaseWriteContext): Promise<boolean> =
               ? BigInt(cursor!.nextBlock)
               : boundary + 1n
             ).toString(),
-            nextLiveBlock: (boundary + 1n).toString(),
+            nextLiveBlock: (cursor?.nextLiveBlock != null &&
+            BigInt(cursor.nextLiveBlock) < boundary + 1n
+              ? BigInt(cursor.nextLiveBlock)
+              : boundary + 1n
+            ).toString(),
             previousBlockHash:
               BigInt(cursor!.nextBlock) < boundary + 1n
                 ? cursor!.previousBlockHash

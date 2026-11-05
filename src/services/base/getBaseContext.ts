@@ -3,6 +3,8 @@ import { http, createPublicClient } from 'viem';
 import getBaseConfiguration from './getBaseConfiguration';
 import type { BaseContext } from '../../types/base/configuration';
 
+const contexts = new Map<string, BaseContext>();
+
 const getBaseContext = async (network: 'testnet' | 'public'): Promise<BaseContext> => {
   const configuration = getBaseConfiguration(network);
 
@@ -10,15 +12,22 @@ const getBaseContext = async (network: 'testnet' | 'public'): Promise<BaseContex
     throw new Error(`Base ${network} is not configured`);
   }
 
+  const key = `${network}:${configuration.rpcUrl}:${configuration.factoryAddress}`;
+  const existing = contexts.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
   const client = createPublicClient({
     transport: http(configuration.rpcUrl, { timeout: 15_000, retryCount: 2 }),
   });
 
-  if ((await client.getChainId()) !== configuration.chainId) {
-    throw new Error('Base RPC chain ID mismatch');
-  }
+  const context = { configuration, client };
 
-  return { configuration, client };
+  contexts.set(key, context);
+
+  return context;
 };
 
 export default getBaseContext;

@@ -8,6 +8,7 @@ import {
   type xdr,
 } from '@stellar/stellar-sdk';
 
+import simulateContractRead from './simulateContractRead';
 import type { ChainRead } from '../../types/launch/reader';
 
 const readContract = async (
@@ -26,7 +27,14 @@ const readContract = async (
     .setTimeout(30)
     .build();
 
-  const simulation = await server.simulateTransaction(transaction);
+  const key = `${networkPassphrase}:${contractId}:${method}:${args.map((arg): string => arg.toXDR('base64')).join(':')}`;
+
+  const simulation = await simulateContractRead(
+    server,
+    transaction,
+    key,
+    method === 'get_state' || method === 'current_price',
+  );
 
   if (
     !rpc.Api.isSimulationSuccess(simulation) ||
