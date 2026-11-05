@@ -61,6 +61,12 @@ vi.mock('../../../src/services/tokenImage/markTokenImagesForCleanup', () => ({ d
 
 vi.mock('../../../src/services/stellar/syncAssetIdentities', () => ({ default: vi.fn() }));
 
+vi.mock('../../../src/services/stellar/rebuildStellarHoldings', () => ({ default: vi.fn() }));
+
+vi.mock('../../../src/services/stellar/startStellarTransactionWorker', () => ({
+  default: vi.fn().mockResolvedValue({ stop: vi.fn() }),
+}));
+
 describe('launch worker timer coordination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -139,7 +145,7 @@ describe('launch worker timer coordination', () => {
 
     const running = runLaunchWorker();
 
-    await vi.advanceTimersByTimeAsync(29_999);
+    await vi.advanceTimersByTimeAsync(59_999);
 
     expect(syncFactory).toHaveBeenCalledTimes(1);
 
@@ -179,6 +185,7 @@ describe('launch worker timer coordination', () => {
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(createLaunchReader).toHaveBeenCalledTimes(2);
+
     expect(log.warn).toHaveBeenCalledWith(
       expect.objectContaining({ error, chain: 'stellar', network: 'testnet' }),
       expect.stringContaining('other networks continue'),
