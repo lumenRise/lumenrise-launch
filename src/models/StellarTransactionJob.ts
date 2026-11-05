@@ -12,6 +12,7 @@ const schema = new Schema<JobRecord>(
     scheduledAt: { type: Date, default: Date.now },
     leaseUntil: { type: Date, default: null },
     attempts: { type: Number, default: 0 },
+    notFoundAttempts: { type: Number, default: 0, min: 0 },
     observedBlock: { type: Number },
     failureStatus: { type: Number, enum: [400, 409] },
     lastError: { type: String, default: null },
