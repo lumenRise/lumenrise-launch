@@ -10,6 +10,11 @@ services:
       DB_URI: mongodb://mongo:27017/?replicaSet=rs0
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-lumenrise}:${RABBITMQ_PASSWORD:?Set the same RABBITMQ_PASSWORD as the API}@rabbitmq:5672
       DB_NAME: ${DB_NAME:-lumenrise}
+      TESTNET_TOML: /app/storage/testnet/${STELLAR_TESTNET_TOML_FILENAME:-testnet_stellar.toml}
+      PUBLIC_TOML: /app/storage/public/${STELLAR_PUBLIC_TOML_FILENAME:-stellar.toml}
+    volumes:
+      - '${STELLAR_TESTNET_TOML_DIRNAME:-/var/www/lumenrise/testnet}:/app/storage/testnet'
+      - '${STELLAR_PUBLIC_TOML_DIRNAME:-/var/www/lumenrise/public}:/app/storage/public'
 networks:
   default:
     name: lumenrise

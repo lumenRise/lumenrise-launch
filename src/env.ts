@@ -24,6 +24,22 @@ const schema = defineConfig({
     type: 'number',
     default: 5_000,
   },
+  R2_ENDPOINT: {
+    example: 'https://<account_id>.r2.cloudflarestorage.com',
+  },
+  R2_ACCESS_KEY_ID: {
+    example: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+  },
+  R2_SECRET_ACCESS_KEY: {
+    secret: true,
+    example: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+  },
+  R2_BUCKET_NAME: {
+    example: 'my-bucket-name',
+  },
+  R2_PUBLIC_BASE_URL: {
+    example: 'https://images.lumenrise.app',
+  },
   BASE_LOG_BLOCK_RANGE: {
     type: 'number',
     default: 1000,
@@ -55,6 +71,19 @@ const schema = defineConfig({
   LAUNCH_TESTNET_FACTORY_CONTRACT_ID: {
     example: 'CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526',
   },
+  STELLAR_TESTNET_HOME_DOMAIN: {
+    example: 'testnet.example',
+  },
+  STELLAR_TESTNET_TOML_DIRNAME: {
+    default: './storage/testnet',
+  },
+  STELLAR_TESTNET_TOML_FILENAME: {
+    default: 'stellar.toml',
+  },
+  TESTNET_TOML: {
+    example: './storage/testnet/stellar.toml',
+    required: false,
+  },
   STELLAR_PUBLIC_RPC_URL: {
     example: 'https://stellar-mainnet-rpc.example',
   },
@@ -63,6 +92,19 @@ const schema = defineConfig({
   },
   LAUNCH_PUBLIC_FACTORY_CONTRACT_ID: {
     example: 'CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526',
+  },
+  STELLAR_PUBLIC_HOME_DOMAIN: {
+    example: 'mainnet.example',
+  },
+  STELLAR_PUBLIC_TOML_DIRNAME: {
+    default: './storage/public',
+  },
+  STELLAR_PUBLIC_TOML_FILENAME: {
+    default: 'stellar.toml',
+  },
+  PUBLIC_TOML: {
+    example: './storage/public/stellar.toml',
+    required: false,
   },
 });
 
