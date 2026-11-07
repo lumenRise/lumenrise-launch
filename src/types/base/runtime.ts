@@ -2,6 +2,7 @@ import type { Block } from 'viem';
 
 interface BaseRuntime {
   head?: bigint;
+  headObservedAt?: number;
   initialized: boolean;
   holdingsInitialized: boolean;
   historyActive: boolean;
