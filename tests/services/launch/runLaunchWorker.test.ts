@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import log from '../../../src/logger';
 import syncFactory from '../../../src/services/launch/syncFactory';
 import { connectDatabase, disconnectDatabase } from '../../../src/db';
+import isNetworkActive from '../../../src/services/launch/isNetworkActive';
 import runLaunchWorker from '../../../src/services/launch/runLaunchWorker';
 import refreshLaunchState from '../../../src/services/launch/refreshLaunchState';
 import createLaunchReader from '../../../src/services/stellar/createLaunchReader';
 import syncAssetIdentities from '../../../src/services/stellar/syncAssetIdentities';
+import networkActivityEvents from '../../../src/services/launch/networkActivityEvents';
 import finalizeTokenImages from '../../../src/services/tokenImage/finalizeTokenImages';
 import { loadConfiguration } from '../../../src/services/configuration/loadConfiguration';
 
@@ -61,6 +63,10 @@ vi.mock('../../../src/services/launch/startLaunchHolderWorker', () => ({
 
 vi.mock('../../../src/services/launch/syncFactory', () => ({ default: vi.fn() }));
 
+vi.mock('../../../src/services/launch/isNetworkActive', () => ({
+  default: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('../../../src/services/launch/refreshLaunchState', () => ({ default: vi.fn() }));
 
 vi.mock('../../../src/services/tokenImage/finalizeTokenImages', () => ({ default: vi.fn() }));
@@ -90,6 +96,8 @@ describe('launch worker timer coordination', () => {
 
     vi.mocked(syncFactory).mockResolvedValue(0);
 
+    vi.mocked(isNetworkActive).mockResolvedValue(true);
+
     vi.mocked(refreshLaunchState).mockResolvedValue(0);
 
     vi.mocked(finalizeTokenImages).mockResolvedValue(undefined);
@@ -98,6 +106,46 @@ describe('launch worker timer coordination', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('keeps testnet polling asleep until activity and pauses again after expiry', async (): Promise<void> => {
+    vi.mocked(isNetworkActive).mockResolvedValue(false);
+
+    const running = runLaunchWorker();
+
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(syncFactory).not.toHaveBeenCalled();
+
+    expect(refreshLaunchState).not.toHaveBeenCalled();
+
+    expect(syncAssetIdentities).not.toHaveBeenCalled();
+
+    vi.mocked(isNetworkActive).mockResolvedValue(true);
+
+    networkActivityEvents.emit('stellar');
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(syncFactory).toHaveBeenCalledOnce();
+
+    expect(refreshLaunchState).toHaveBeenCalledOnce();
+
+    vi.mocked(isNetworkActive).mockResolvedValue(false);
+
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+
+    expect(syncFactory).toHaveBeenCalledOnce();
+
+    expect(refreshLaunchState).toHaveBeenCalledOnce();
+
+    process.emit('SIGTERM');
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await running;
+
+    expect(disconnectDatabase).toHaveBeenCalledOnce();
+  });
 
   it('continues price polling while slow maintenance runs and drains it on shutdown', async () => {
     let finish: (value: number) => void = (): void => {};

@@ -11,6 +11,7 @@ import rebuildBaseHoldings from './rebuildBaseHoldings';
 import type { BaseLoopMode } from '../../types/base/launch';
 import initializeBaseLiveCursor from './initializeBaseLiveCursor';
 import markBaseImagesForCleanup from './markBaseImagesForCleanup';
+import waitForNetworkActivity from '../launch/waitForNetworkActivity';
 import type { BaseConfiguration } from '../../types/base/configuration';
 
 const runBaseScanLoop = async (
@@ -22,6 +23,10 @@ const runBaseScanLoop = async (
   const intervalMs = mode === 'head' ? 60_000 : 5_000;
 
   while (!signal.aborted) {
+    if (!(await waitForNetworkActivity('base', network, signal))) {
+      break;
+    }
+
     const started = Date.now();
 
     try {

@@ -2,10 +2,25 @@ import getStatsChart from '../stats/getStatsChart';
 import getMarketStats from '../stats/getMarketStats';
 import getProjectVolume from '../stats/getProjectVolume';
 import type { DomainRequest } from '../../types/messaging/domain';
+import networkActivityEvents from '../launch/networkActivityEvents';
 import parseStatsChartQuery from '../../utils/stats/parseStatsChartQuery';
 
 const handleLaunchRequest = async (request: DomainRequest): Promise<unknown> => {
   const { operation, parameters } = request;
+
+  if (operation === 'testnet.activity') {
+    if (
+      (parameters.chain !== 'stellar' && parameters.chain !== 'base') ||
+      parameters.network !== 'testnet'
+    ) {
+      throw new Error('Invalid testnet activity identity');
+    }
+
+    networkActivityEvents.emit(parameters.chain);
+
+    return { status: 'accepted' };
+  }
+
   const now = typeof parameters.now === 'string' ? new Date(parameters.now) : null;
 
   if (!now || !Number.isFinite(now.getTime())) {
