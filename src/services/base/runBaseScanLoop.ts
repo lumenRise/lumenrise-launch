@@ -19,6 +19,7 @@ const runBaseScanLoop = async (
   mode: BaseLoopMode,
 ): Promise<void> => {
   const runtime = getBaseRuntime(network);
+  const intervalMs = mode === 'head' ? 60_000 : 5_000;
 
   while (!signal.aborted) {
     const started = Date.now();
@@ -28,6 +29,8 @@ const runBaseScanLoop = async (
         const context = await getBaseContext(network);
 
         runtime.head = await context.client.getBlockNumber({ cacheTime: 0 });
+
+        runtime.headObservedAt = Date.now();
 
         if (!runtime.initialized) {
           runtime.initialized = await initializeBaseLiveCursor(network, runtime.head);
@@ -65,7 +68,10 @@ const runBaseScanLoop = async (
           runtime.cleanupAt = Date.now() + 60_000;
         }
       } else if (runtime.initialized && runtime.head !== undefined) {
-        if (mode === 'live' && started >= runtime.factoryAt) {
+        const freshHead =
+          runtime.headObservedAt !== undefined && started - runtime.headObservedAt < 60_000;
+
+        if (mode === 'live' && freshHead && started >= runtime.factoryAt) {
           const caughtUp = await drainBaseScan(network, 'live', signal);
 
           if (caughtUp) {
@@ -77,11 +83,11 @@ const runBaseScanLoop = async (
           runtime.historyActive = !(await drainBaseScan(network, 'history', signal));
         }
 
-        if (mode === 'pool' && started >= runtime.poolAt) {
+        if (mode === 'pool' && freshHead && started >= runtime.poolAt) {
           const caughtUp = await drainBaseScan(network, 'pool', signal);
 
           if (caughtUp) {
-            runtime.poolAt = Date.now() + 15_000;
+            runtime.poolAt = Date.now() + 60_000;
           }
         }
       }
@@ -90,7 +96,7 @@ const runBaseScanLoop = async (
     }
 
     try {
-      await delay(Math.max(1, 5_000 - (Date.now() - started)), undefined, { signal });
+      await delay(Math.max(1, intervalMs - (Date.now() - started)), undefined, { signal });
     } catch (error) {
       if (!signal.aborted) {
         throw error;
