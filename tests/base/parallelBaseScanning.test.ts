@@ -14,6 +14,10 @@ vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
 
 vi.mock('../../src/services/base/scanBaseNetwork', () => ({ default: vi.fn() }));
 
+vi.mock('../../src/services/launch/isNetworkActive', () => ({
+  default: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('../../src/services/base/acquireBaseLease', () => ({ default: vi.fn(async () => null) }));
 
 vi.mock('../../src/services/base/markBaseImagesForCleanup', () => ({ default: vi.fn() }));

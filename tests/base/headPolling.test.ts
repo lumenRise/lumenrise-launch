@@ -12,6 +12,10 @@ vi.mock('../../src/logger', () => ({ default: { error: vi.fn() } }));
 
 vi.mock('../../src/services/base/getBaseContext', () => ({ default: vi.fn() }));
 
+vi.mock('../../src/services/launch/isNetworkActive', () => ({
+  default: vi.fn().mockResolvedValue(true),
+}));
+
 beforeEach((): void => {
   vi.clearAllMocks();
 });

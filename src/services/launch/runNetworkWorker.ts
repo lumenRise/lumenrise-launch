@@ -5,6 +5,7 @@ import syncFactory from './syncFactory';
 import createLaunchStore from './createLaunchStore';
 import refreshLaunchState from './refreshLaunchState';
 import createScheduledTask from './createScheduledTask';
+import waitForNetworkActivity from './waitForNetworkActivity';
 import type { Configuration } from '../../types/configuration';
 import startLaunchHolderWorker from './startLaunchHolderWorker';
 import syncAssetIdentities from '../stellar/syncAssetIdentities';
@@ -90,6 +91,10 @@ const runNetworkWorker = async (
     tasks.push(factoryTask, imageTask, cleanupTask, assetTask);
 
     while (!signal.aborted) {
+      if (!(await waitForNetworkActivity('stellar', configuration.network, signal))) {
+        break;
+      }
+
       factoryTask.tick();
 
       if (!reconcileFactory) {

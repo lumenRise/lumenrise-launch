@@ -7,6 +7,7 @@ import LaunchHolder from '../../models/LaunchHolder';
 import FactoryCursor from '../../models/FactoryCursor';
 import AssetIdentity from '../../models/AssetIdentity';
 import BaseCheckpoint from '../../models/BaseCheckpoint';
+import TestnetActivity from '../../models/TestnetActivity';
 import LaunchPriceSample from '../../models/LaunchPriceSample';
 import BaseTransactionJob from '../../models/BaseTransactionJob';
 import StellarTransactionJob from '../../models/StellarTransactionJob';
@@ -27,6 +28,7 @@ const createLaunchIndexes = async (): Promise<void> => {
     FactoryCursor.createIndexes(),
     AssetIdentity.createIndexes(),
     LaunchPriceSample.createIndexes(),
+    TestnetActivity.createIndexes(),
   ]);
 };
 
