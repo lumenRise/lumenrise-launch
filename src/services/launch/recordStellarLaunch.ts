@@ -10,6 +10,7 @@ import resolveLaunchMetadata from './resolveLaunchMetadata';
 import readLaunchContract from '../stellar/readLaunchContract';
 import parseLaunchConfig from '../../utils/launch/parseLaunchConfig';
 import type { StellarNetwork } from '../../types/network/configuration';
+import launchIndexedActivity from '../../utils/launch/launchIndexedActivity';
 import deriveStellarLaunchAddress from '../../utils/launch/deriveStellarLaunchAddress';
 
 const recordStellarLaunch = async (
@@ -81,6 +82,13 @@ const recordStellarLaunch = async (
 
   const slug = await claimLaunchName(launch);
   const metadata = await resolveLaunchMetadata(launch);
+  const createdAt = new Date(transaction.createdAt * 1000);
+
+  const creation = {
+    createdAt,
+    creationLedger: transaction.ledger,
+    creationTransactionHash: transaction.txHash,
+  };
 
   try {
     const result = await Launch.updateOne(
@@ -93,19 +101,15 @@ const recordStellarLaunch = async (
           holderSource: 'recorded_trades',
           nextStatePollAt: new Date(0),
         },
-        $set: {
-          createdAt: new Date(transaction.createdAt * 1000),
-          creationLedger: transaction.ledger,
-          creationTransactionHash: transaction.txHash,
-        },
+        $set: creation,
       },
       { upsert: true },
     );
 
     if (result.upsertedCount === 1) {
       log.info(
-        { ...identity, factoryIndex: index, transactionHash: transaction.txHash },
-        'Stellar new launch indexed from confirmation',
+        launchIndexedActivity({ ...launch, ...creation }),
+        'Stellar new launch indexed',
       );
     }
   } catch (error) {

@@ -208,6 +208,9 @@ const processBaseBlock = async (input: BaseBlockInput): Promise<void> => {
             message: trade.side === 'buy' ? 'Base buy indexed' : 'Base sell indexed',
             data: {
               ...trade,
+              event: 'trade.indexed',
+              asset: launch.asset,
+              pair: launch.pair,
               blockNumber: number.toString(),
               assetDecimals: launch.assetDecimals,
               pairDecimals: launch.pairDecimals,

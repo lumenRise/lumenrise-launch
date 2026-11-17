@@ -4,6 +4,7 @@ import type { LaunchStore } from '../../types/launch/store';
 import type { LaunchReader } from '../../types/launch/reader';
 import type { Configuration } from '../../types/configuration';
 import parseLaunchConfig from '../../utils/launch/parseLaunchConfig';
+import launchIndexedActivity from '../../utils/launch/launchIndexedActivity';
 
 const syncFactory = async (
   reader: LaunchReader,
@@ -95,20 +96,7 @@ const syncFactory = async (
       continue;
     }
 
-    log.info(
-      {
-        chain: 'stellar',
-        network: launch.network,
-        factoryContractId: launch.factoryContractId,
-        factoryIndex: launch.factoryIndex,
-        contractId: launch.contractId,
-        name: launch.metadata.name,
-        symbol: launch.metadata.symbol,
-        asset: launch.asset,
-        owner: launch.owner,
-      },
-      'Stellar new launch indexed',
-    );
+    log.info(launchIndexedActivity(launch), 'Stellar new launch indexed');
 
     index += 1;
     added += 1;
