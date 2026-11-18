@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+import log from '../../logger';
 import Launch from '../../models/Launch';
 import getStellarRpc from './getStellarRpc';
 import LaunchTrade from '../../models/LaunchTrade';
@@ -102,8 +103,8 @@ const processStellarTransaction = async (
     throw new Error('Launch is not indexed yet');
   }
 
-  await mongoose.connection.transaction(async (session): Promise<void> => {
-    await LaunchTrade.updateOne(
+  const inserted = await mongoose.connection.transaction(async (session): Promise<boolean> => {
+    const result = await LaunchTrade.updateOne(
       { ...identity, transactionHash: job.transactionHash, operationIndex: 0 },
       { $setOnInsert: verified },
       { upsert: true, session },
@@ -118,7 +119,24 @@ const processStellarTransaction = async (
       { $set: { priceRecordedAt: new Date() } },
       { session },
     );
+
+    return result.upsertedCount === 1;
   });
+
+  if (inserted) {
+    log.info(
+      {
+        ...verified,
+        ...identity,
+        event: 'trade.indexed',
+        asset: launch.asset,
+        pair: launch.pair,
+        assetDecimals: 7,
+        pairDecimals: 7,
+      },
+      verified.side === 'buy' ? 'Stellar buy indexed' : 'Stellar sell indexed',
+    );
+  }
 
   return {
     blockNumber: verified.ledger,
